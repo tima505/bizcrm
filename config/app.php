@@ -105,8 +105,9 @@ return [
      */
 
     'available_locales' => [
-        'ar' => 'Arabic',
+        'ru' => 'Русский',
         'en' => 'English',
+        'ar' => 'Arabic',
         'es' => 'Español',
         'fa' => 'Persian',
         'ja' => '日本語',
