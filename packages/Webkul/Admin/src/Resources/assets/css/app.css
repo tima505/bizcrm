@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------------- brand ---------------- */
+/* Change this one value to recolour buttons, links and brand accents. */
+:root {
+    --brand-color: #0E90D9;
+}
+
 /* -------------------------------- new css -------------------------------- */
 
 @font-face {

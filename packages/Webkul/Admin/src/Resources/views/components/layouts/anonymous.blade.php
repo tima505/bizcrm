@@ -57,23 +57,24 @@
         >
     @else
         <link
-            type="image/x-icon"
-            href="{{ vite()->asset('images/favicon.ico') }}"
+            type="image/svg+xml"
+            href="{{ asset('favicon.svg') }}"
             rel="shortcut icon"
-            sizes="16x16"
         />
     @endif
 
     @php
-        $brandColor = core()->getConfigData('general.settings.menu_color.brand_color') ?? '#0E90D9';
+        $brandColor = core()->getConfigData('general.settings.menu_color.brand_color');
     @endphp
 
     @stack('styles')
 
     <style>
+        @if ($brandColor)
         :root {
             --brand-color: {{ $brandColor }};
         }
+        @endif
 
         {!! core()->getConfigData('general.content.custom_scripts.custom_css') !!}
     </style>
