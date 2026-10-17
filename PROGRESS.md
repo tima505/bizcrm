@@ -117,6 +117,88 @@
   4. Проверить: `& 'C:\laragon\bin\php\php-8.3.33-Win32-vs16-x64\php.exe' -r "var_dump(opcache_get_status(false));"` → должен показать `opcache_enabled => true`.
 - Короткий путь через GUI: в трее Laragon правой кнопкой → **PHP → Extensions → opcache** (поставить галку), затем Reload Apache.
 
+## Что сделано (2026-10-17) — WhatsApp через Baileys
+
+Канальный приём и отправка WhatsApp-сообщений внутри CRM. Структура универсальная (одна таблица `messaging_messages` с полем `channel`), чтобы позже легко добавить Telegram/Instagram.
+
+### Этап 1 — Node-мост (коммит `2e35464a`)
+
+Папка `whatsapp-service/` — отдельный Node-сервис на Baileys 6.7, Express, pino, qrcode-terminal. QR печатается в терминал, авторизация хранится в `whatsapp-service/auth/` (в .gitignore).
+
+HTTP-эндпоинты (слушает `127.0.0.1:3000`):
+- `GET /health` — проверка связи с WhatsApp (`state: connected|disconnected`).
+- `POST /send` — отправка текста. Защищён заголовком `X-Whatsapp-Secret`.
+- При входящем — POST на `LARAVEL_INCOMING_URL` с тем же секретом.
+
+Конфиг в `whatsapp-service/.env` (gitignore), шаблон — в `whatsapp-service/.env.example`.
+
+### Этап 2 — Laravel-пакет (коммит `347de713`)
+
+Пакет `packages/Webkul/Whatsapp/`:
+- Таблица `messaging_messages` (`channel`, `chat_id`, `from_number`, `direction`, `content`, FK на `persons`/`leads`).
+- `/api/whatsapp/incoming` — приём от Node. Автосоздание контакта и лида для нового номера (source «WhatsApp», pipeline/stage по умолчанию). Для существующего контакта берётся его последний открытый лид.
+- `/admin/messages` — список чатов слева, переписка справа, поле ответа. Polling каждые 3с (без перезагрузки страницы).
+- `/admin/messages/send` POST — отправка через Node.
+- Пункт в сайдбаре «Сообщения» с иконкой `icon-mail`, ACL `messages.view` / `messages.send`.
+- Переводы: `ru` (по умолчанию) и `en`.
+
+Регистрация:
+- `bootstrap/providers.php` — `WhatsappServiceProvider`.
+- `config/concord.php` — `WhatsappModuleServiceProvider`.
+- `composer.json` — PSR-4 `Webkul\Whatsapp\`.
+
+Shared secret хранится в двух местах — `whatsapp-service/.env` и корневом `.env` (`WHATSAPP_SECRET`). Должны совпадать байт в байт.
+
+### Этап 3 — как запустить и проверить (локально)
+
+**Разово (если ставите на чистой машине):**
+```powershell
+cd whatsapp-service
+npm install     # уже сделано — пропустить, если node_modules на месте
+cd ..
+```
+
+**Каждый запуск — два окна PowerShell:**
+
+Окно 1 — Laravel (нужен поднятый MySQL в Laragon):
+```powershell
+cd C:\Users\Asus\Desktop\Bitirix24\bizcrm
+& 'C:\laragon\bin\php\php-8.3.33-Win32-vs16-x64\php.exe' artisan serve
+# слушает http://127.0.0.1:8000
+```
+
+Окно 2 — Node WhatsApp мост:
+```powershell
+cd C:\Users\Asus\Desktop\Bitirix24\bizcrm\whatsapp-service
+npm start
+# первый запуск — в терминале появится QR-код
+```
+
+**Привязка WhatsApp (разово):**
+1. На телефоне: WhatsApp → Настройки → Связанные устройства → Привязать устройство.
+2. Отсканировать QR из окна Node. После успешной привязки в терминале появится `[wa] connected as 7XXXXXXXXXX@s.whatsapp.net`.
+3. Папка `whatsapp-service/auth/` сохранит сессию — следующий запуск уже без QR.
+
+**Проверка:**
+1. Открыть `http://127.0.0.1:8000/admin/login` → войти как `admin@example.com` / `admin123`.
+2. В левом сайдбаре — пункт «Сообщения». Пока пусто.
+3. Со **второго** телефона отправить сообщение на привязанный номер.
+4. Через 1–3 секунды чат появится в разделе «Сообщения» слева. Параллельно в разделе «Контакты» будет создан контакт, в «Лиды» — лид (источник «WhatsApp»).
+5. Открыть чат → ввести ответ → «Отправить». Сообщение придёт в WhatsApp на телефон.
+
+**Диагностика:**
+- `GET http://127.0.0.1:3000/health` → `{"ok":true,"state":"connected"}` означает, что мост жив и привязан.
+- Если `state: disconnected` — проверьте, что в Node-терминале нет ошибок, при необходимости удалите `whatsapp-service/auth/` и перескандируйте QR.
+- Логи Laravel: `storage/logs/laravel.log`.
+- Если `/api/whatsapp/incoming` отвечает 401 — секреты в `whatsapp-service/.env` и корневом `.env` не совпадают.
+
+**Что НЕ сделано (сознательно, вне MVP):**
+- Картинки/медиа — только текст.
+- Групповые чаты — приходят, но без корректной привязки к контакту.
+- Статусы доставки/прочтения — не отслеживаются.
+- Отдельный worker/queue — отправка синхронная внутри HTTP-запроса.
+- WebSocket — вместо него polling 3с.
+
 ## Проблемы и как решены (архив с прошлой сессии)
 
 - **composer install висел на «Generating optimized autoload files»** — вендоры уже были скачаны, но `vendor/autoload.php` отсутствовал. `composer dump-autoload --optimize --no-scripts` отдельно, затем `package:discover` вручную.
