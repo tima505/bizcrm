@@ -62,9 +62,15 @@ class MessageController extends Controller
             'text' => 'required|string',
         ]);
 
-        $number = $data['number'] ?: $data['chat_id'];
+        /**
+         * Always route by the chat_id (the full WhatsApp JID we got on the
+         * inbound side). "number" is only kept as a display hint and may be
+         * a non-routable string like "lid:12345" or "+7...". The JID is what
+         * actually tells WhatsApp which chat to deliver to.
+         */
+        $target = $data['chat_id'];
 
-        $result = $this->client->send($number, $data['text']);
+        $result = $this->client->send($target, $data['text']);
 
         if (! ($result['ok'] ?? false)) {
             return response()->json([
@@ -77,7 +83,7 @@ class MessageController extends Controller
             'channel' => 'whatsapp',
             'external_id' => $result['external_id'] ?? null,
             'chat_id' => $result['chat_id'] ?? $data['chat_id'],
-            'from_number' => $number,
+            'from_number' => $data['number'] ?: $data['chat_id'],
             'contact_name' => null,
             'content' => $data['text'],
             'direction' => 'outgoing',
