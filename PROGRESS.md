@@ -238,15 +238,10 @@ WhatsApp для части отправителей присылает `remoteJi
 | contacts   | 816    | 700    | 1146   | **−37 %**     |
 | messages   | 579    | 508    | 788    | **−48 %**     |
 
-**Что ещё можно отключить (большой запас, требует вашего участия):**
+**Opcache включён (2026-10-22):**
 
-Opcache — ещё `~300-400 мс` на страницу. Включается правкой `C:\laragon\bin\php\php-8.3.33-Win32-vs16-x64\php.ini` (нужны права администратора):
-
+В `C:\laragon\bin\php\php-8.3.33-Win32-vs16-x64\php.ini` раскомментированы и выставлены:
 ```ini
-; Строка 833 — уже раскомментирована:
-zend_extension=opcache
-
-; Строки 1517-1551 — расскомментировать и выставить:
 opcache.enable=1
 opcache.enable_cli=1
 opcache.memory_consumption=256
@@ -257,13 +252,30 @@ opcache.revalidate_freq=2
 opcache.save_comments=1
 ```
 
-После правки — остановить и перезапустить `php artisan serve` (opcache подхватывается только при старте PHP). Проверить:
-
+Проверка:
 ```powershell
 & 'C:\laragon\bin\php\php-8.3.33-Win32-vs16-x64\php.exe' -r "var_dump(opcache_get_status(false)['opcache_enabled'] ?? false);"
 ```
 
-Должно вернуть `bool(true)`.
+**Эффект opcache (поверх всего остального):**
+
+| страница   | до opcache | opcache ON (warm) | Δ    |
+|------------|-----------:|------------------:|-----:|
+| dashboard  | 677        | 628               | −49  |
+| leads      | 774        | 644               | −130 |
+| contacts   | 816        | 713               | −103 |
+| messages   | 579        | 490               | −89  |
+
+Прибавка скромнее теоретических «−400 мс», потому что `config/route/view/event cache` уже сняли основную часть парсинг-работы, а PHP built-in server на NTFS в принципе хуже раскрывает opcache, чем nginx+php-fpm на Linux.
+
+**Итого от baseline:**
+
+| страница   | было | стало | Δ         |
+|------------|-----:|------:|----------:|
+| dashboard  | 1233 | 628   | **−49 %** |
+| leads      | 1316 | 644   | **−51 %** |
+| contacts   | 1298 | 713   | **−45 %** |
+| messages   | 1108 | 490   | **−56 %** |
 
 **Про `APP_DEBUG=true`**: отдельно от debugbar он стоит ~0-30 мс на страницу (замерял — в пределах шума). Можно оставить как есть.
 
