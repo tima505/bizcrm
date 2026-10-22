@@ -43,6 +43,37 @@
 
     @stack('meta')
 
+    {{--
+        Prefetch + prerender admin GET pages on hover (Chrome/Edge).
+        Chrome keeps a hidden copy of each hovered page and swaps it in on
+        click, so navigation inside the admin feels near-instant. Other
+        browsers silently ignore this block.
+
+        Excluded: logout, data mutation endpoints, PDF/export, and anything
+        tagged with data-no-prerender="true".
+    --}}
+    <script type="speculationrules">
+    {
+        "prerender": [
+            {
+                "where": {
+                    "and": [
+                        { "href_matches": "/admin/*" },
+                        { "not": { "href_matches": "/admin/logout*" } },
+                        { "not": { "href_matches": "/admin/*/create*" } },
+                        { "not": { "href_matches": "/admin/*/edit/*" } },
+                        { "not": { "href_matches": "/admin/*/delete/*" } },
+                        { "not": { "href_matches": "/admin/*/export*" } },
+                        { "not": { "href_matches": "/admin/*/export-pdf*" } },
+                        { "not": { "selector_matches": "[data-no-prerender=\"true\"]" } }
+                    ]
+                },
+                "eagerness": "moderate"
+            }
+        ]
+    }
+    </script>
+
     {{
         vite()->set(['src/Resources/assets/css/app.css', 'src/Resources/assets/js/app.js'])
     }}

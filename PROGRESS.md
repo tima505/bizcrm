@@ -203,7 +203,86 @@ WhatsApp для части отправителей присылает `remoteJi
 - `LeadRepository::create` требует `entity_type: 'leads'` — без него падал `AttributeValueRepository::save` с «Undefined array key».
 - Исходящие (`/admin/messages/send`) всегда маршрутизируются по `chat_id`, а не по display-номеру.
 
-### Статус на 2026-10-17 (конец дня)
+## Что сделано (2026-10-22) — ускорение админки
+
+Админка грузилась ~1.1-1.3 с на страницу. Все замеры — `tools/measure.ps1`, 5 прогонов на страницу через authenticated HTTP на `127.0.0.1:8000`.
+
+**Было (baseline)**
+
+| страница   | avg_ms | min_ms | max_ms |
+|------------|--------|--------|--------|
+| dashboard  | 1233   | 1210   | 1265   |
+| leads      | 1316   | 1178   | 1516   |
+| contacts   | 1298   | 1191   | 1468   |
+| messages   | 1108   | 1004   | 1297   |
+
+**Диагностика (`tools/profile_queries.php /admin/<path>`):**
+- SQL всего 20-40 мс на страницу — БД не узкое место.
+- Остальные ~500-700 мс — чистый PHP (парсинг файлов, рендер Blade, Vue setup).
+- 15x `attribute_options` + 8-10x `attributes` + 9-15x `core_config` — повторные запросы в `quick-creation.blade.php` (хедер с модалкой «быстро создать» на каждой странице). Суммарно дёшево (~25 мс), оставлено как есть.
+- `barryvdh/laravel-debugbar` активен по умолчанию из-за `APP_DEBUG=true` — отжирал ~550 мс на запрос и +250 KB HTML.
+- opcache выключен (`;opcache.*` закомментированы в `php.ini`) — ~400 мс парсинга PHP на каждый запрос.
+
+**Что сделано (без правки БД, по согласованию):**
+1. **Debugbar выключен** через `DEBUGBAR_ENABLED=false` в `.env`. Сам пакет оставлен в composer. `APP_DEBUG=true` сохранён.
+2. **`php artisan optimize`** → `config:cache`, `route:cache`, `view:cache`, `event:cache`. Если правите `.env` или роуты — `php artisan optimize:clear`, потом снова `optimize`.
+3. **Prerender на hover** через Speculation Rules API (Chrome/Edge). В `packages/Webkul/Admin/src/Resources/views/components/layouts/index.blade.php` добавлен `<script type="speculationrules">` с `eagerness: moderate`. Браузер прогревает `/admin/*` GET-страницы (кроме logout/create/edit/delete/export) на hover; клик по пункту меню переключается на уже отрисованную страницу мгновенно. Firefox/Safari этот блок игнорируют.
+4. **Turbo (Hotwire) не внедрялся** — архитектура Krayin (один `createApp` на `#app`, который оборачивает весь body, монтируется на `window.load`) требует демонтажа/монтажа Vue на каждом переходе. Это ломает TinyMCE, Flatpickr, polling в `/admin/messages` и формы. Пререндер даёт ту же perceived-скорость с нулевым риском.
+
+**Стало**
+
+| страница   | avg_ms | min_ms | max_ms | Δ vs baseline |
+|------------|--------|--------|--------|---------------|
+| dashboard  | 677    | 591    | 901    | **−45 %**     |
+| leads      | 774    | 677    | 998    | **−41 %**     |
+| contacts   | 816    | 700    | 1146   | **−37 %**     |
+| messages   | 579    | 508    | 788    | **−48 %**     |
+
+**Что ещё можно отключить (большой запас, требует вашего участия):**
+
+Opcache — ещё `~300-400 мс` на страницу. Включается правкой `C:\laragon\bin\php\php-8.3.33-Win32-vs16-x64\php.ini` (нужны права администратора):
+
+```ini
+; Строка 833 — уже раскомментирована:
+zend_extension=opcache
+
+; Строки 1517-1551 — расскомментировать и выставить:
+opcache.enable=1
+opcache.enable_cli=1
+opcache.memory_consumption=256
+opcache.interned_strings_buffer=16
+opcache.max_accelerated_files=20000
+opcache.validate_timestamps=1
+opcache.revalidate_freq=2
+opcache.save_comments=1
+```
+
+После правки — остановить и перезапустить `php artisan serve` (opcache подхватывается только при старте PHP). Проверить:
+
+```powershell
+& 'C:\laragon\bin\php\php-8.3.33-Win32-vs16-x64\php.exe' -r "var_dump(opcache_get_status(false)['opcache_enabled'] ?? false);"
+```
+
+Должно вернуть `bool(true)`.
+
+**Про `APP_DEBUG=true`**: отдельно от debugbar он стоит ~0-30 мс на страницу (замерял — в пределах шума). Можно оставить как есть.
+
+**Чем мерить:**
+
+```powershell
+# Серверная сторона, 5 прогонов на страницу:
+powershell -NoProfile -File tools/measure.ps1 -Label 'now' -Runs 5
+
+# Что в HTML (debugbar, Vite dev, число ассетов):
+powershell -NoProfile -File tools/inspect.ps1 -Path '/admin/dashboard'
+
+# Профиль SQL на конкретной странице:
+php tools/profile_queries.php /admin/leads
+```
+
+**Если что-то сломалось**: откатить speculationrules — удалить блок `<script type="speculationrules">` из `components/layouts/index.blade.php` и `view:cache`. Вернуть debugbar — убрать строку `DEBUGBAR_ENABLED=false` из `.env`.
+
+## Статус на 2026-10-17 (конец дня)
 
 **Работает:** Node мост привязан, входящие (включая `@lid`) доходят в CRM, автоматически создаётся контакт + лид, список чатов виден в `/admin/messages`.
 
