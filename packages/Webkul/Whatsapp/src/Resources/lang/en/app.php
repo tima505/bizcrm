@@ -21,6 +21,10 @@ return [
         'empty' => 'No messages in this chat yet.',
     ],
 
+    'time' => [
+        'yesterday' => 'yesterday',
+    ],
+
     'send' => [
         'placeholder' => 'Type a message…',
         'button' => 'Send',

@@ -32,6 +32,8 @@ class MessageController extends Controller
             return response()->json(['messages' => [], 'chats' => $this->chatList()]);
         }
 
+        $this->markChatAsRead($chatId);
+
         $messages = $this->messages->getModel()
             ->where('chat_id', $chatId)
             ->orderBy('id')
@@ -89,6 +91,7 @@ class MessageController extends Controller
             'direction' => 'outgoing',
             'status' => 'sent',
             'sent_at' => Carbon::now(),
+            'read_at' => Carbon::now(),
             'person_id' => $this->resolvePersonId($data['chat_id']),
             'lead_id' => $this->resolveLeadId($data['chat_id']),
         ]);
@@ -107,9 +110,6 @@ class MessageController extends Controller
 
     protected function chatList(): array
     {
-        $prefix = DB::getTablePrefix();
-        $table = $prefix.'messaging_messages';
-
         $latestIds = DB::table('messaging_messages')
             ->select(DB::raw('MAX(id) as id'))
             ->groupBy('chat_id')
@@ -119,19 +119,116 @@ class MessageController extends Controller
             return [];
         }
 
+        $unreadCounts = DB::table('messaging_messages')
+            ->select('chat_id', DB::raw('COUNT(*) as cnt'))
+            ->where('direction', 'incoming')
+            ->whereNull('read_at')
+            ->groupBy('chat_id')
+            ->pluck('cnt', 'chat_id');
+
         return DB::table('messaging_messages')
             ->whereIn('id', $latestIds)
             ->orderByDesc('id')
             ->get()
-            ->map(fn ($r) => [
-                'chat_id' => $r->chat_id,
-                'contact_name' => $r->contact_name ?: $r->from_number,
-                'from_number' => $r->from_number,
-                'last_content' => $r->content,
-                'last_direction' => $r->direction,
-                'last_at' => $r->sent_at ?: $r->created_at,
-            ])
+            ->map(function ($r) use ($unreadCounts) {
+                $name = $this->displayName($r);
+                $preview = $this->buildPreview($r);
+                $lastAt = $r->sent_at ?: $r->created_at;
+
+                return [
+                    'chat_id' => $r->chat_id,
+                    'name' => $name,
+                    'initial' => $this->initialOf($name),
+                    'phone' => $this->displayPhone($r),
+                    'from_number' => $r->from_number,
+                    'preview' => $preview,
+                    'direction' => $r->direction,
+                    'last_at' => $lastAt
+                        ? Carbon::parse($lastAt)->toIso8601String()
+                        : null,
+                    'unread' => (int) ($unreadCounts[$r->chat_id] ?? 0),
+                ];
+            })
             ->toArray();
+    }
+
+    protected function markChatAsRead(string $chatId): void
+    {
+        DB::table('messaging_messages')
+            ->where('chat_id', $chatId)
+            ->where('direction', 'incoming')
+            ->whereNull('read_at')
+            ->update(['read_at' => Carbon::now()]);
+    }
+
+    protected function displayName(object $r): string
+    {
+        $name = trim((string) ($r->contact_name ?? ''));
+
+        if ($name !== '' && preg_match('/[\p{L}\p{N}]/u', $name)) {
+            return $name;
+        }
+
+        return $this->displayPhone($r);
+    }
+
+    protected function displayPhone(object $r): string
+    {
+        $raw = trim((string) ($r->from_number ?? ''));
+
+        if ($raw === '' || ! preg_match('/[\p{L}\p{N}]/u', $raw)) {
+            $raw = (string) ($r->chat_id ?? '');
+        }
+
+        if (str_starts_with($raw, 'lid:')) {
+            return 'WhatsApp #'.substr($raw, 4);
+        }
+
+        if (str_contains($raw, '@lid')) {
+            return 'WhatsApp #'.explode('@', $raw)[0];
+        }
+
+        if (str_contains($raw, '@')) {
+            $digits = explode('@', $raw)[0];
+
+            return $digits !== '' ? '+'.$digits : $raw;
+        }
+
+        if (preg_match('/^\d{7,}$/', $raw)) {
+            return '+'.$raw;
+        }
+
+        return $raw;
+    }
+
+    protected function initialOf(string $name): string
+    {
+        $trimmed = trim($name);
+
+        if ($trimmed === '') {
+            return '?';
+        }
+
+        if (preg_match('/[\p{L}\p{N}]/u', $trimmed, $m)) {
+            return mb_strtoupper($m[0]);
+        }
+
+        return '?';
+    }
+
+    protected function buildPreview(object $r): string
+    {
+        $content = trim((string) ($r->content ?? ''));
+
+        if ($content === '') {
+            $content = '…';
+        }
+
+        if (mb_strlen($content) > 60) {
+            $content = mb_substr($content, 0, 60).'…';
+        }
+
+        return $content;
     }
 
     protected function resolvePersonId(string $chatId): ?int
