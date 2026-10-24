@@ -192,6 +192,38 @@ npm start
 - Логи Laravel: `storage/logs/laravel.log`.
 - Если `/api/whatsapp/incoming` отвечает 401 — секреты в `whatsapp-service/.env` и корневом `.env` не совпадают.
 
+### Фикс кликов по чату после Vue-mount (2026-10-24)
+
+После коммита `c89babed` клик по карточке чата в `/admin/messages`
+ничего не делал: заголовок справа не менялся, поле ответа и кнопка
+«Отправить» оставались `disabled`. Ошибок в консоли при этом не было.
+
+Причина: админский layout монтирует Vue через `app.mount("#app")` на
+`window.load`, и Vue 3 **заменяет** все дочерние узлы `#app` на
+свежерендеренные. IIFE в `whatsapp::admin.index` выполнялся раньше —
+во время парсинга `@stack('scripts')` — и кэшировал ссылки через
+`getElementById` (`headerEl`, `textInput`, `sendBtn`, `chatListEl`,
+`threadEl`, `sendForm`). После монтирования Vue эти ссылки указывают
+на detached-узлы. Click-обработчик по чату срабатывал (его успевал
+переподцепить `bindChatItems()` на следующий poll через
+`document.querySelectorAll`), но внутри `selectChat()` все
+`headerEl.textContent = …`, `textInput.disabled = false` писали в
+orphan-ноды — живой DOM не менялся. Submit вообще не стрелял, т.к.
+`sendForm.addEventListener('submit', …)` висел на detached-форме.
+
+Фикс в `packages/Webkul/Whatsapp/src/Resources/views/admin/index.blade.php`:
+- вместо кэша — ленивый `$ = (id) => document.getElementById(id)` в
+  каждой функции,
+- делегирование `click`/`submit` с `document` (`closest('.wa-chat-item')`
+  / `closest('#wa-send-form')`), чтобы хэндлеры переживали ре-рендер,
+- старт polling'а перенесён в `window.load` (чтобы первый проход шёл
+  уже по live-DOM Vue).
+
+Проверено headless-Chrome'ом через CDP: клик по чату меняет заголовок,
+разблокирует input/кнопку, подгружает тред; submit отправляет
+сообщение в WhatsApp и обновляет список бабблов. `tools/smoke.ps1` —
+все страницы 200 OK, `thread` endpoint отвечает.
+
 ### Фикс поддержки `@lid`-чатов (коммит `9130b70a`)
 
 WhatsApp для части отправителей присылает `remoteJid` вида `...@lid` (LID privacy). В первой версии Node приводил такой JID к `@s.whatsapp.net`, из-за чего ответы не доходили, а один сбой расшифровки клал сервис.

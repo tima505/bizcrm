@@ -103,20 +103,24 @@
     @pushOnce('scripts')
     <script>
     (function () {
-        const root = document.getElementById('wa-messages');
-        if (!root) return;
+        // The admin layout mounts Vue on window.load, which replaces the
+        // entire #app subtree with freshly-rendered nodes. Any element
+        // reference captured by getElementById() before that mount becomes
+        // detached, so writes through it silently no-op on the live page.
+        // That's why clicking a chat looked dead: the handler ran, but
+        // headerEl.textContent / textInput.disabled hit orphan nodes.
+        //
+        // Fix: look up elements lazily by id on each read, and delegate
+        // click/submit from `document` so handlers survive remounts.
+        const rootInitial = document.getElementById('wa-messages');
+        if (!rootInitial) return;
 
-        const threadUrl = root.dataset.threadUrl;
-        const sendUrl = root.dataset.sendUrl;
-        const csrf = root.dataset.csrf;
-        const yesterdayLabel = root.dataset.yesterday || 'yesterday';
+        const threadUrl = rootInitial.dataset.threadUrl;
+        const sendUrl = rootInitial.dataset.sendUrl;
+        const csrf = rootInitial.dataset.csrf;
+        const yesterdayLabel = rootInitial.dataset.yesterday || 'yesterday';
 
-        const threadEl = document.getElementById('wa-thread');
-        const headerEl = document.getElementById('wa-thread-header');
-        const chatListEl = document.getElementById('wa-chat-list');
-        const textInput = document.getElementById('wa-send-text');
-        const sendBtn = document.getElementById('wa-send-btn');
-        const sendForm = document.getElementById('wa-send-form');
+        const $ = (id) => document.getElementById(id);
 
         let activeChatId = null;
         let activeNumber = null;
@@ -166,16 +170,23 @@
             return pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
         }
 
-        // Convert initial server-rendered timestamps to short display.
-        document.querySelectorAll('.wa-chat-time').forEach(el => {
-            const iso = el.dataset.iso || el.textContent.trim();
-            el.textContent = formatShortTime(iso);
-        });
+        function refreshVisibleTimes() {
+            document.querySelectorAll('.wa-chat-time').forEach(el => {
+                const iso = el.dataset.iso || el.textContent.trim();
+                const short = formatShortTime(iso);
+                if (short && el.textContent.trim() !== short) {
+                    el.textContent = short;
+                }
+            });
+        }
 
         function renderThread(messages) {
             if (!activeChatId) {
                 return;
             }
+
+            const threadEl = $('wa-thread');
+            if (!threadEl) return;
 
             const key = JSON.stringify(messages.map(m => [m.id, m.status]));
             if (key === lastThreadKey) return;
@@ -201,6 +212,9 @@
         }
 
         function renderChatList(chats) {
+            const chatListEl = $('wa-chat-list');
+            if (!chatListEl) return;
+
             if (!chats || !chats.length) {
                 chatListEl.innerHTML = `<li class="px-3 py-4 text-sm text-gray-500">${escapeHtml(noChatsLabel)}</li>`;
                 return;
@@ -239,8 +253,6 @@
                     </li>
                 `;
             }).join('');
-
-            bindChatItems();
         }
 
         async function loadThread() {
@@ -264,28 +276,39 @@
         function selectChat(chatId, number, label) {
             activeChatId = chatId;
             activeNumber = number || chatId;
-            headerEl.textContent = label || chatId;
+            const headerEl = $('wa-thread-header');
+            const threadEl = $('wa-thread');
+            const textInput = $('wa-send-text');
+            const sendBtn = $('wa-send-btn');
+            if (headerEl) headerEl.textContent = label || chatId;
             lastThreadKey = '';
-            threadEl.innerHTML = '';
-            textInput.disabled = false;
-            sendBtn.disabled = false;
+            if (threadEl) threadEl.innerHTML = '';
+            if (textInput) textInput.disabled = false;
+            if (sendBtn) sendBtn.disabled = false;
             loadThread();
         }
 
-        function bindChatItems() {
-            document.querySelectorAll('.wa-chat-item').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    selectChat(
-                        btn.dataset.chatId,
-                        btn.dataset.number,
-                        btn.dataset.name || btn.dataset.number || btn.dataset.chatId,
-                    );
-                });
-            });
-        }
+        // Delegate click + submit from document so re-rendered children work.
+        document.addEventListener('click', (ev) => {
+            const btn = ev.target.closest ? ev.target.closest('.wa-chat-item') : null;
+            if (!btn) return;
+            if (!document.getElementById('wa-messages')?.contains(btn)) return;
+            selectChat(
+                btn.dataset.chatId,
+                btn.dataset.number,
+                btn.dataset.name || btn.dataset.number || btn.dataset.chatId,
+            );
+        });
 
-        sendForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
+        document.addEventListener('submit', async (ev) => {
+            const form = ev.target.closest ? ev.target.closest('#wa-send-form') : null;
+            if (!form) return;
+            ev.preventDefault();
+
+            const textInput = $('wa-send-text');
+            const sendBtn = $('wa-send-btn');
+            if (!textInput || !sendBtn) return;
+
             const text = textInput.value.trim();
             if (!text || !activeChatId) return;
 
@@ -322,10 +345,21 @@
             }
         });
 
-        bindChatItems();
+        function startPolling() {
+            refreshVisibleTimes();
+            if (pollTimer) return;
+            pollTimer = setInterval(() => {
+                loadThread();
+                refreshVisibleTimes();
+            }, 3000);
+            loadThread();
+        }
 
-        pollTimer = setInterval(loadThread, 3000);
-        loadThread();
+        if (document.readyState === 'complete') {
+            startPolling();
+        } else {
+            window.addEventListener('load', startPolling, { once: true });
+        }
     })();
     </script>
     @endPushOnce
