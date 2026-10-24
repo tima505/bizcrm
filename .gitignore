@@ -34,3 +34,7 @@ node_modules/
 /test-results/
 /blob-report/
 /playwright/.cache/
+
+# Local-only diagnostic artefacts (CDP probe scripts, screenshots)
+/tools/_shots/
+/whatsapp-service/_*.cjs

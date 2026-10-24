@@ -29,7 +29,11 @@ class MessageController extends Controller
         $chatId = (string) $request->query('chat_id', '');
 
         if ($chatId === '') {
-            return response()->json(['messages' => [], 'chats' => $this->chatList()]);
+            return response()->json([
+                'messages' => [],
+                'chats' => $this->chatList(),
+                'lead_id' => null,
+            ]);
         }
 
         $this->markChatAsRead($chatId);
@@ -53,6 +57,7 @@ class MessageController extends Controller
         return response()->json([
             'messages' => $messages,
             'chats' => $this->chatList(),
+            'lead_id' => $this->resolveLeadId($chatId),
         ]);
     }
 
@@ -126,11 +131,20 @@ class MessageController extends Controller
             ->groupBy('chat_id')
             ->pluck('cnt', 'chat_id');
 
+        $leadIds = DB::table('messaging_messages')
+            ->whereIn('chat_id', DB::table('messaging_messages')
+                ->whereIn('id', $latestIds)
+                ->pluck('chat_id'))
+            ->whereNotNull('lead_id')
+            ->select('chat_id', DB::raw('MAX(lead_id) as lead_id'))
+            ->groupBy('chat_id')
+            ->pluck('lead_id', 'chat_id');
+
         return DB::table('messaging_messages')
             ->whereIn('id', $latestIds)
             ->orderByDesc('id')
             ->get()
-            ->map(function ($r) use ($unreadCounts) {
+            ->map(function ($r) use ($unreadCounts, $leadIds) {
                 $name = $this->displayName($r);
                 $preview = $this->buildPreview($r);
                 $lastAt = $r->sent_at ?: $r->created_at;
@@ -147,6 +161,7 @@ class MessageController extends Controller
                         ? Carbon::parse($lastAt)->toIso8601String()
                         : null,
                     'unread' => (int) ($unreadCounts[$r->chat_id] ?? 0),
+                    'lead_id' => isset($leadIds[$r->chat_id]) ? (int) $leadIds[$r->chat_id] : null,
                 ];
             })
             ->toArray();
@@ -161,15 +176,32 @@ class MessageController extends Controller
             ->update(['read_at' => Carbon::now()]);
     }
 
+    /**
+     * Pushname first (if it carries at least one letter — pure dots/digits are
+     * usually garbage from WhatsApp). For lid-only chats fall back to a
+     * neutral label; for routable phone chats use the "+<digits>" form.
+     */
     protected function displayName(object $r): string
     {
         $name = trim((string) ($r->contact_name ?? ''));
 
-        if ($name !== '' && preg_match('/[\p{L}\p{N}]/u', $name)) {
+        if ($name !== '' && preg_match('/\p{L}/u', $name)) {
             return $name;
         }
 
+        if ($this->isLidChat($r)) {
+            return (string) trans('whatsapp::app.chat.anonymous');
+        }
+
         return $this->displayPhone($r);
+    }
+
+    protected function isLidChat(object $r): bool
+    {
+        $chatId = (string) ($r->chat_id ?? '');
+        $raw = (string) ($r->from_number ?? '');
+
+        return str_contains($chatId, '@lid') || str_starts_with($raw, 'lid:');
     }
 
     protected function displayPhone(object $r): string
@@ -180,12 +212,8 @@ class MessageController extends Controller
             $raw = (string) ($r->chat_id ?? '');
         }
 
-        if (str_starts_with($raw, 'lid:')) {
-            return 'WhatsApp #'.substr($raw, 4);
-        }
-
-        if (str_contains($raw, '@lid')) {
-            return 'WhatsApp #'.explode('@', $raw)[0];
+        if (str_starts_with($raw, 'lid:') || str_contains($raw, '@lid')) {
+            return (string) trans('whatsapp::app.chat.anonymous');
         }
 
         if (str_contains($raw, '@')) {
@@ -209,8 +237,12 @@ class MessageController extends Controller
             return '?';
         }
 
-        if (preg_match('/[\p{L}\p{N}]/u', $trimmed, $m)) {
+        if (preg_match('/\p{L}/u', $trimmed, $m)) {
             return mb_strtoupper($m[0]);
+        }
+
+        if (preg_match('/\d/u', $trimmed, $m)) {
+            return $m[0];
         }
 
         return '?';

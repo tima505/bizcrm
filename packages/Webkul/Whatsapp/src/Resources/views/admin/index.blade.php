@@ -11,14 +11,18 @@
 
     <div
         id="wa-messages"
-        class="flex h-[calc(100vh-200px)] gap-0 overflow-hidden rounded-md border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
+        class="flex h-[calc(100vh-180px)] gap-0 overflow-hidden rounded-md border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
         data-thread-url="{{ route('admin.messages.thread') }}"
         data-send-url="{{ route('admin.messages.send') }}"
+        data-lead-url-template="{{ route('admin.leads.view', ['id' => '__ID__']) }}"
         data-csrf="{{ csrf_token() }}"
-        data-yesterday="{{ __('whatsapp::app.time.yesterday') }}"
+        data-today="{{ __('whatsapp::app.thread.today') }}"
+        data-yesterday="{{ __('whatsapp::app.thread.yesterday') }}"
+        data-yesterday-short="{{ __('whatsapp::app.time.yesterday') }}"
+        data-open-lead="{{ __('whatsapp::app.thread.open-lead') }}"
     >
-        <aside class="flex w-[300px] shrink-0 flex-col border-r border-gray-200 dark:border-gray-800">
-            <div class="border-b border-gray-200 px-3 py-2.5 text-sm font-semibold dark:border-gray-800 dark:text-white">
+        <aside class="flex w-[320px] shrink-0 flex-col border-r border-gray-200 bg-gray-50/60 dark:border-gray-800 dark:bg-gray-900">
+            <div class="border-b border-gray-200 px-4 py-3 text-sm font-semibold text-gray-800 dark:border-gray-800 dark:text-white">
                 {{ __('whatsapp::app.index.title') }}
             </div>
             <ul id="wa-chat-list" class="flex-1 overflow-y-auto">
@@ -26,24 +30,25 @@
                     <li>
                         <button
                             type="button"
-                            class="wa-chat-item flex w-full items-center gap-3 border-b border-gray-100 px-3 py-2.5 text-left hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800"
+                            class="wa-chat-item flex w-full items-center gap-3 border-b border-gray-100 px-3 py-3 text-left transition hover:bg-gray-100 dark:border-gray-800 dark:hover:bg-gray-800"
                             data-chat-id="{{ $chat['chat_id'] }}"
                             data-number="{{ $chat['from_number'] }}"
                             data-name="{{ $chat['name'] }}"
+                            data-lead-id="{{ $chat['lead_id'] ?? '' }}"
                         >
-                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brandColor/10 text-sm font-semibold text-brandColor">
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brandColor/15 text-sm font-semibold text-brandColor">
                                 {{ $chat['initial'] }}
                             </span>
                             <span class="flex min-w-0 flex-1 flex-col">
                                 <span class="flex items-baseline justify-between gap-2">
-                                    <span class="truncate text-sm font-medium text-gray-800 dark:text-white">
+                                    <span class="truncate text-sm font-medium text-gray-900 dark:text-white">
                                         {{ $chat['name'] }}
                                     </span>
                                     <span class="shrink-0 text-[11px] text-gray-500 dark:text-gray-400 wa-chat-time" data-iso="{{ $chat['last_at'] }}">
                                         {{ $chat['last_at'] }}
                                     </span>
                                 </span>
-                                <span class="flex items-center justify-between gap-2">
+                                <span class="mt-0.5 flex items-center justify-between gap-2">
                                     <span class="truncate text-xs text-gray-500 dark:text-gray-400">
                                         @if ($chat['direction'] === 'outgoing')
                                             <span class="text-gray-400">↗</span>
@@ -60,37 +65,61 @@
                         </button>
                     </li>
                 @empty
-                    <li class="px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                    <li class="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
                         {{ __('whatsapp::app.index.no-chats') }}
                     </li>
                 @endforelse
             </ul>
         </aside>
 
-        <section class="flex flex-1 flex-col">
+        <section class="flex min-w-0 flex-1 flex-col bg-[#f0f2f5] dark:bg-gray-900/50">
             <div
                 id="wa-thread-header"
-                class="border-b border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-800 dark:border-gray-800 dark:text-white"
+                class="flex items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 dark:border-gray-800 dark:bg-gray-900 dark:text-white"
             >
-                {{ __('whatsapp::app.index.pick-chat') }}
+                <div class="flex min-w-0 items-center gap-3">
+                    <span id="wa-thread-avatar" class="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brandColor/15 text-sm font-semibold text-brandColor"></span>
+                    <span id="wa-thread-title" class="truncate">
+                        {{ __('whatsapp::app.index.pick-chat') }}
+                    </span>
+                </div>
+                <a
+                    id="wa-open-lead"
+                    href="#"
+                    class="hidden shrink-0 rounded border border-brandColor/40 bg-brandColor/5 px-3 py-1 text-xs font-medium text-brandColor hover:bg-brandColor/10"
+                >
+                    {{ __('whatsapp::app.thread.open-lead') }}
+                </a>
             </div>
 
-            <div id="wa-thread" class="flex-1 space-y-2 overflow-y-auto p-4"></div>
+            <div id="wa-thread" class="flex-1 overflow-y-auto px-4 py-4">
+                <div id="wa-thread-placeholder" class="flex h-full flex-col items-center justify-center gap-3 text-center text-gray-500 dark:text-gray-400">
+                    <svg class="h-16 w-16 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                    </svg>
+                    <div class="text-sm font-medium">
+                        {{ __('whatsapp::app.index.pick-chat') }}
+                    </div>
+                    <div class="max-w-xs text-xs">
+                        {{ __('whatsapp::app.index.pick-chat-hint') }}
+                    </div>
+                </div>
+            </div>
 
             <form
                 id="wa-send-form"
-                class="flex gap-2 border-t border-gray-200 p-3 dark:border-gray-800"
+                class="flex items-end gap-2 border-t border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900"
             >
-                <input
+                <textarea
                     id="wa-send-text"
-                    type="text"
-                    class="flex-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                    rows="1"
+                    class="max-h-32 min-h-[38px] flex-1 resize-none rounded-md border border-gray-300 bg-white px-3 py-2 text-sm leading-5 placeholder:text-gray-400 focus:border-brandColor focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                     placeholder="{{ __('whatsapp::app.send.placeholder') }}"
                     disabled
-                />
+                ></textarea>
                 <button
                     type="submit"
-                    class="rounded bg-brandColor px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                    class="shrink-0 rounded-md bg-brandColor px-4 py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50"
                     disabled
                     id="wa-send-btn"
                 >
@@ -103,33 +132,44 @@
     @pushOnce('scripts')
     <script>
     (function () {
-        // The admin layout mounts Vue on window.load, which replaces the
-        // entire #app subtree with freshly-rendered nodes. Any element
-        // reference captured by getElementById() before that mount becomes
-        // detached, so writes through it silently no-op on the live page.
-        // That's why clicking a chat looked dead: the handler ran, but
-        // headerEl.textContent / textInput.disabled hit orphan nodes.
-        //
-        // Fix: look up elements lazily by id on each read, and delegate
-        // click/submit from `document` so handlers survive remounts.
+        // Admin layout mounts Vue on window.load and replaces #app's subtree,
+        // so any ref cached via getElementById before mount points at a
+        // detached node. Keep everything lazy and use event delegation.
         const rootInitial = document.getElementById('wa-messages');
         if (!rootInitial) return;
 
         const threadUrl = rootInitial.dataset.threadUrl;
         const sendUrl = rootInitial.dataset.sendUrl;
+        const leadUrlTemplate = rootInitial.dataset.leadUrlTemplate;
         const csrf = rootInitial.dataset.csrf;
-        const yesterdayLabel = rootInitial.dataset.yesterday || 'yesterday';
+        const todayLabel = rootInitial.dataset.today || 'Today';
+        const yesterdayLabel = rootInitial.dataset.yesterday || 'Yesterday';
+        const yesterdayShort = rootInitial.dataset.yesterdayShort || 'yesterday';
+        const openLeadLabel = rootInitial.dataset.openLead || 'Open lead';
 
         const $ = (id) => document.getElementById(id);
 
         let activeChatId = null;
         let activeNumber = null;
+        let activeName = null;
+        let activeLeadId = null;
         let pollTimer = null;
         let lastThreadKey = '';
 
         const emptyLabel = @json(__('whatsapp::app.thread.empty'));
         const sendFailLabel = @json(__('whatsapp::app.send.failed'));
         const noChatsLabel = @json(__('whatsapp::app.index.no-chats'));
+        const pickLabel = @json(__('whatsapp::app.index.pick-chat'));
+        const anonymousLabel = @json(__('whatsapp::app.chat.anonymous'));
+
+        const monthNames = [
+            @json(__('Jan')), @json(__('Feb')), @json(__('Mar')),
+            @json(__('Apr')), @json(__('May')), @json(__('Jun')),
+            @json(__('Jul')), @json(__('Aug')), @json(__('Sep')),
+            @json(__('Oct')), @json(__('Nov')), @json(__('Dec'))
+        ];
+        // Fallback to Russian/English month names if translations resolve to the key.
+        const monthsRu = ['янв.','февр.','марта','апр.','мая','июня','июля','авг.','сент.','окт.','нояб.','дек.'];
 
         function escapeHtml(s) {
             return String(s ?? '').replace(/[&<>"']/g, c => ({
@@ -137,9 +177,9 @@
             }[c]));
         }
 
-        function pad2(n) {
-            return n < 10 ? '0' + n : '' + n;
-        }
+        function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+
+        function startOfDay(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
 
         function formatShortTime(iso) {
             if (!iso) return '';
@@ -147,30 +187,42 @@
             if (isNaN(d.getTime())) return '';
 
             const now = new Date();
-            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            const that = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-            const dayDiff = Math.round((today - that) / 86400000);
+            const dayDiff = Math.round((startOfDay(now) - startOfDay(d)) / 86400000);
 
             if (dayDiff === 0) {
                 return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
             }
             if (dayDiff === 1) {
-                return yesterdayLabel;
+                return yesterdayShort;
             }
-            if (dayDiff < 7 && dayDiff > 0) {
+            if (dayDiff > 0 && dayDiff < 7) {
                 return d.toLocaleDateString(undefined, { weekday: 'short' });
             }
             return pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1);
         }
 
-        function formatFullTime(iso) {
+        function formatBubbleTime(iso) {
             if (!iso) return '';
             const d = new Date(iso);
             if (isNaN(d.getTime())) return '';
-            return pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+            return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
         }
 
-        function refreshVisibleTimes() {
+        function formatDateSeparator(iso) {
+            const d = new Date(iso);
+            const now = new Date();
+            const dayDiff = Math.round((startOfDay(now) - startOfDay(d)) / 86400000);
+            if (dayDiff === 0) return todayLabel;
+            if (dayDiff === 1) return yesterdayLabel;
+            const day = d.getDate();
+            const month = monthsRu[d.getMonth()] || monthNames[d.getMonth()] || (d.getMonth() + 1);
+            if (d.getFullYear() === now.getFullYear()) {
+                return day + ' ' + month;
+            }
+            return day + ' ' + month + ' ' + d.getFullYear();
+        }
+
+        function refreshVisibleChatTimes() {
             document.querySelectorAll('.wa-chat-time').forEach(el => {
                 const iso = el.dataset.iso || el.textContent.trim();
                 const short = formatShortTime(iso);
@@ -181,9 +233,7 @@
         }
 
         function renderThread(messages) {
-            if (!activeChatId) {
-                return;
-            }
+            if (!activeChatId) return;
 
             const threadEl = $('wa-thread');
             if (!threadEl) return;
@@ -193,22 +243,58 @@
             lastThreadKey = key;
 
             if (!messages.length) {
-                threadEl.innerHTML = `<div class="text-sm text-gray-500">${escapeHtml(emptyLabel)}</div>`;
+                threadEl.innerHTML = `
+                    <div class="flex h-full items-center justify-center text-sm text-gray-500">
+                        ${escapeHtml(emptyLabel)}
+                    </div>
+                `;
                 return;
             }
 
-            threadEl.innerHTML = messages.map(m => {
-                const isOut = m.direction === 'outgoing';
-                const align = isOut ? 'ml-auto bg-brandColor/10 border-brandColor/30' : 'mr-auto bg-gray-100 dark:bg-gray-800';
-                return `
-                    <div class="max-w-[70%] rounded border px-3 py-2 text-sm ${align}">
-                        <div class="whitespace-pre-wrap break-words">${escapeHtml(m.content)}</div>
-                        <div class="mt-1 text-[10px] text-gray-500">${escapeHtml(formatFullTime(m.sent_at))}</div>
-                    </div>
-                `;
-            }).join('');
+            const atBottom = (threadEl.scrollHeight - threadEl.scrollTop - threadEl.clientHeight) < 40;
 
-            threadEl.scrollTop = threadEl.scrollHeight;
+            const parts = [];
+            let lastDayKey = null;
+            for (const m of messages) {
+                const iso = m.sent_at;
+                const d = iso ? new Date(iso) : null;
+                const dayKey = d && !isNaN(d.getTime())
+                    ? d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate()
+                    : 'nodate';
+
+                if (dayKey !== lastDayKey) {
+                    lastDayKey = dayKey;
+                    const label = iso ? formatDateSeparator(iso) : '';
+                    if (label) {
+                        parts.push(`
+                            <div class="my-3 flex justify-center">
+                                <span class="rounded-full bg-white/80 px-3 py-0.5 text-[11px] font-medium text-gray-600 shadow-sm dark:bg-gray-800 dark:text-gray-300">
+                                    ${escapeHtml(label)}
+                                </span>
+                            </div>
+                        `);
+                    }
+                }
+
+                const isOut = m.direction === 'outgoing';
+                const align = isOut ? 'ml-auto' : 'mr-auto';
+                const bubbleCls = isOut
+                    ? 'bg-brandColor text-white'
+                    : 'bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100';
+                const timeCls = isOut ? 'text-white/70' : 'text-gray-500 dark:text-gray-400';
+
+                parts.push(`
+                    <div class="mb-1.5 flex ${isOut ? 'justify-end' : 'justify-start'}">
+                        <div class="max-w-[75%] rounded-lg px-3 py-2 text-sm leading-snug shadow-sm ${bubbleCls}">
+                            <div class="whitespace-pre-wrap break-words">${escapeHtml(m.content)}</div>
+                            <div class="mt-1 text-right text-[10px] ${timeCls}">${escapeHtml(formatBubbleTime(iso))}</div>
+                        </div>
+                    </div>
+                `);
+            }
+
+            threadEl.innerHTML = parts.join('');
+            if (atBottom) threadEl.scrollTop = threadEl.scrollHeight;
         }
 
         function renderChatList(chats) {
@@ -216,35 +302,40 @@
             if (!chatListEl) return;
 
             if (!chats || !chats.length) {
-                chatListEl.innerHTML = `<li class="px-3 py-4 text-sm text-gray-500">${escapeHtml(noChatsLabel)}</li>`;
+                chatListEl.innerHTML = `<li class="px-4 py-6 text-center text-sm text-gray-500">${escapeHtml(noChatsLabel)}</li>`;
                 return;
             }
 
             chatListEl.innerHTML = chats.map(c => {
-                const activeCls = c.chat_id === activeChatId ? 'bg-gray-50 dark:bg-gray-800' : '';
+                const activeCls = c.chat_id === activeChatId
+                    ? 'bg-brandColor/10 dark:bg-brandColor/20'
+                    : '';
                 const unreadBadge = c.unread > 0
                     ? `<span class="shrink-0 rounded-full bg-brandColor px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">${escapeHtml(c.unread)}</span>`
                     : '';
                 const outArrow = c.direction === 'outgoing' ? '<span class="text-gray-400">↗</span> ' : '';
+                const leadAttr = c.lead_id ? `data-lead-id="${escapeHtml(c.lead_id)}"` : '';
+                const name = c.name || c.phone || anonymousLabel;
 
                 return `
                     <li>
                         <button
                             type="button"
-                            class="wa-chat-item flex w-full items-center gap-3 border-b border-gray-100 px-3 py-2.5 text-left hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800 ${activeCls}"
+                            class="wa-chat-item flex w-full items-center gap-3 border-b border-gray-100 px-3 py-3 text-left transition hover:bg-gray-100 dark:border-gray-800 dark:hover:bg-gray-800 ${activeCls}"
                             data-chat-id="${escapeHtml(c.chat_id)}"
                             data-number="${escapeHtml(c.from_number || '')}"
-                            data-name="${escapeHtml(c.name || '')}"
+                            data-name="${escapeHtml(name)}"
+                            ${leadAttr}
                         >
-                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brandColor/10 text-sm font-semibold text-brandColor">
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brandColor/15 text-sm font-semibold text-brandColor">
                                 ${escapeHtml(c.initial || '?')}
                             </span>
                             <span class="flex min-w-0 flex-1 flex-col">
                                 <span class="flex items-baseline justify-between gap-2">
-                                    <span class="truncate text-sm font-medium text-gray-800 dark:text-white">${escapeHtml(c.name || c.phone || c.chat_id)}</span>
+                                    <span class="truncate text-sm font-medium text-gray-900 dark:text-white">${escapeHtml(name)}</span>
                                     <span class="shrink-0 text-[11px] text-gray-500 dark:text-gray-400">${escapeHtml(formatShortTime(c.last_at))}</span>
                                 </span>
-                                <span class="flex items-center justify-between gap-2">
+                                <span class="mt-0.5 flex items-center justify-between gap-2">
                                     <span class="truncate text-xs text-gray-500 dark:text-gray-400">${outArrow}${escapeHtml(c.preview || '')}</span>
                                     ${unreadBadge}
                                 </span>
@@ -253,6 +344,45 @@
                     </li>
                 `;
             }).join('');
+        }
+
+        function updateHeader() {
+            const titleEl = $('wa-thread-title');
+            const avatarEl = $('wa-thread-avatar');
+            const openLeadLink = $('wa-open-lead');
+
+            if (!activeChatId) {
+                if (titleEl) titleEl.textContent = pickLabel;
+                if (avatarEl) {
+                    avatarEl.classList.add('hidden');
+                    avatarEl.classList.remove('inline-flex');
+                }
+                if (openLeadLink) openLeadLink.classList.add('hidden');
+                return;
+            }
+
+            const label = activeName || activeChatId;
+            if (titleEl) titleEl.textContent = label;
+            if (avatarEl) {
+                avatarEl.classList.remove('hidden');
+                avatarEl.classList.add('inline-flex');
+                const letter = (label.match(/\p{L}|\d/u) || ['?'])[0].toUpperCase();
+                avatarEl.textContent = letter;
+            }
+            if (openLeadLink) {
+                if (activeLeadId) {
+                    openLeadLink.href = leadUrlTemplate.replace('__ID__', activeLeadId);
+                    openLeadLink.textContent = openLeadLabel;
+                    openLeadLink.classList.remove('hidden');
+                } else {
+                    openLeadLink.classList.add('hidden');
+                }
+            }
+        }
+
+        function removePlaceholder() {
+            const ph = $('wa-thread-placeholder');
+            if (ph) ph.remove();
         }
 
         async function loadThread() {
@@ -267,44 +397,44 @@
                 if (!res.ok) return;
                 const data = await res.json();
                 renderChatList(data.chats || []);
+                if (activeChatId && typeof data.lead_id !== 'undefined') {
+                    activeLeadId = data.lead_id || null;
+                    updateHeader();
+                }
                 renderThread(data.messages || []);
             } catch (e) {
                 // network glitch — next poll will retry
             }
         }
 
-        function selectChat(chatId, number, label) {
+        function selectChat(chatId, number, label, leadId) {
             activeChatId = chatId;
             activeNumber = number || chatId;
-            const headerEl = $('wa-thread-header');
+            activeName = label || chatId;
+            activeLeadId = leadId ? Number(leadId) : null;
+            lastThreadKey = '';
+
+            removePlaceholder();
+            updateHeader();
+
             const threadEl = $('wa-thread');
+            if (threadEl) threadEl.innerHTML = '';
+
             const textInput = $('wa-send-text');
             const sendBtn = $('wa-send-btn');
-            if (headerEl) headerEl.textContent = label || chatId;
-            lastThreadKey = '';
-            if (threadEl) threadEl.innerHTML = '';
-            if (textInput) textInput.disabled = false;
+            if (textInput) { textInput.disabled = false; autosize(textInput); setTimeout(() => textInput.focus(), 0); }
             if (sendBtn) sendBtn.disabled = false;
+
             loadThread();
         }
 
-        // Delegate click + submit from document so re-rendered children work.
-        document.addEventListener('click', (ev) => {
-            const btn = ev.target.closest ? ev.target.closest('.wa-chat-item') : null;
-            if (!btn) return;
-            if (!document.getElementById('wa-messages')?.contains(btn)) return;
-            selectChat(
-                btn.dataset.chatId,
-                btn.dataset.number,
-                btn.dataset.name || btn.dataset.number || btn.dataset.chatId,
-            );
-        });
+        function autosize(el) {
+            if (!el) return;
+            el.style.height = 'auto';
+            el.style.height = Math.min(el.scrollHeight, 128) + 'px';
+        }
 
-        document.addEventListener('submit', async (ev) => {
-            const form = ev.target.closest ? ev.target.closest('#wa-send-form') : null;
-            if (!form) return;
-            ev.preventDefault();
-
+        async function doSend() {
             const textInput = $('wa-send-text');
             const sendBtn = $('wa-send-btn');
             if (!textInput || !sendBtn) return;
@@ -334,6 +464,7 @@
                     alert(sendFailLabel);
                 } else {
                     textInput.value = '';
+                    autosize(textInput);
                     lastThreadKey = '';
                     loadThread();
                 }
@@ -343,14 +474,45 @@
                 sendBtn.disabled = false;
                 textInput.focus();
             }
+        }
+
+        // Delegate click/submit/keydown/input from document so handlers
+        // survive Vue mount.
+        document.addEventListener('click', (ev) => {
+            const btn = ev.target.closest ? ev.target.closest('.wa-chat-item') : null;
+            if (!btn) return;
+            if (!document.getElementById('wa-messages')?.contains(btn)) return;
+
+            const label = btn.dataset.name || btn.dataset.number || btn.dataset.chatId;
+            selectChat(btn.dataset.chatId, btn.dataset.number, label, btn.dataset.leadId || null);
+        });
+
+        document.addEventListener('submit', (ev) => {
+            const form = ev.target.closest ? ev.target.closest('#wa-send-form') : null;
+            if (!form) return;
+            ev.preventDefault();
+            doSend();
+        });
+
+        document.addEventListener('keydown', (ev) => {
+            if (!ev.target || ev.target.id !== 'wa-send-text') return;
+            if (ev.key === 'Enter' && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey) {
+                ev.preventDefault();
+                doSend();
+            }
+        });
+
+        document.addEventListener('input', (ev) => {
+            if (!ev.target || ev.target.id !== 'wa-send-text') return;
+            autosize(ev.target);
         });
 
         function startPolling() {
-            refreshVisibleTimes();
+            refreshVisibleChatTimes();
             if (pollTimer) return;
             pollTimer = setInterval(() => {
                 loadThread();
-                refreshVisibleTimes();
+                refreshVisibleChatTimes();
             }, 3000);
             loadThread();
         }
