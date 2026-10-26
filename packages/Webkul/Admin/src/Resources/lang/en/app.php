@@ -2388,6 +2388,10 @@ return [
         'inventory-info' => 'Manage all your inventory related settings in the CRM',
         'data_transfer' => 'Data Transfer',
         'data_transfer_info' => 'Manage persons, products and leads data transfer related settings in the CRM',
+        'system' => 'System',
+        'system-info' => 'System configuration and help resources.',
+        'configuration-info' => 'CRM parameters: name, currency, timezone, SMTP, branding.',
+        'help-info' => 'Useful links and descriptions of CRM sections.',
     ],
     'user' => [
         'account' => [

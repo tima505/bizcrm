@@ -19,7 +19,7 @@ return [
         'key' => 'leads',
         'name' => 'admin::app.layouts.leads',
         'route' => 'admin.leads.index',
-        'sort' => 2,
+        'sort' => 3,
         'icon-class' => 'icon-leads',
     ],
 
@@ -30,7 +30,7 @@ return [
         'key' => 'quotes',
         'name' => 'admin::app.layouts.quotes',
         'route' => 'admin.quotes.index',
-        'sort' => 3,
+        'sort' => 6,
         'icon-class' => 'icon-quote',
     ],
 
@@ -42,7 +42,7 @@ return [
         'name' => 'admin::app.layouts.mail.title',
         'route' => 'admin.mail.index',
         'params' => ['route' => 'inbox'],
-        'sort' => 4,
+        'sort' => 8,
         'icon-class' => 'icon-mail',
     ], [
         'key' => 'mail.inbox',
@@ -99,7 +99,7 @@ return [
         'key' => 'contacts',
         'name' => 'admin::app.layouts.contacts',
         'route' => 'admin.contacts.persons.index',
-        'sort' => 6,
+        'sort' => 4,
         'icon-class' => 'icon-contact',
     ], [
         'key' => 'contacts.persons',
@@ -133,7 +133,7 @@ return [
         'key' => 'settings',
         'name' => 'admin::app.layouts.settings',
         'route' => 'admin.settings.index',
-        'sort' => 8,
+        'sort' => 9,
         'icon-class' => 'icon-setting',
     ], [
         'key' => 'settings.user',
@@ -278,24 +278,28 @@ return [
     ],
 
     /**
-     * Configuration.
+     * System — section inside Settings, holds Configuration and Help.
      */
     [
-        'key' => 'configuration',
-        'name' => 'admin::app.layouts.configuration',
+        'key' => 'settings.system',
+        'name' => 'admin::app.layouts.system',
+        'info' => 'admin::app.layouts.system-info',
         'route' => 'admin.configuration.index',
-        'sort' => 9,
+        'sort' => 5,
+        'icon-class' => '',
+    ], [
+        'key' => 'settings.system.configuration',
+        'name' => 'admin::app.layouts.configuration',
+        'info' => 'admin::app.layouts.configuration-info',
+        'route' => 'admin.configuration.index',
+        'sort' => 1,
         'icon-class' => 'icon-configuration',
-    ],
-
-    /**
-     * Help.
-     */
-    [
-        'key' => 'help',
+    ], [
+        'key' => 'settings.system.help',
         'name' => 'admin::app.layouts.help',
+        'info' => 'admin::app.layouts.help-info',
         'route' => 'admin.help.index',
-        'sort' => 10,
+        'sort' => 2,
         'icon-class' => 'icon-help',
     ],
 ];

@@ -19,7 +19,13 @@
 
                         <div class="flex-1 flex justify-between items-center text-gray-600 dark:text-gray-300 font-medium whitespace-nowrap group-[.sidebar-collapsed]/container:hidden {{ $menuItem->isActive() ? 'text-white' : ''}} group">
                             <p>{{ $menuItem->getName() }}</p>
-                        
+
+                            @if ($menuItem->getKey() === 'messages' && ($whatsappUnreadCount ?? 0) > 0)
+                                <span class="ml-auto inline-flex min-w-[20px] h-5 px-1.5 items-center justify-center rounded-full bg-red-500 text-white text-xs font-semibold leading-none {{ $menuItem->isActive() ? 'ring-1 ring-white' : '' }}">
+                                    {{ $whatsappUnreadCount > 99 ? '99+' : $whatsappUnreadCount }}
+                                </span>
+                            @endif
+
                             @if ( ! in_array($menuItem->getKey(), ['settings', 'configuration']) && $menuItem->haveChildren())
                                 <i class="icon-right-arrow rtl:icon-left-arrow invisible text-2xl group-hover/item:visible {{ $menuItem->isActive() ? 'text-white' : ''}}"></i>
                             @endif

@@ -2,6 +2,9 @@
 
 namespace Webkul\Whatsapp\Providers;
 
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 class WhatsappServiceProvider extends ServiceProvider
@@ -16,6 +19,25 @@ class WhatsappServiceProvider extends ServiceProvider
 
         $this->loadRoutesFrom(__DIR__.'/../Routes/admin-routes.php');
         $this->loadRoutesFrom(__DIR__.'/../Routes/api-routes.php');
+
+        View::composer(
+            [
+                'admin::components.layouts.sidebar.desktop.index',
+                'admin::components.layouts.sidebar.mobile.index',
+            ],
+            function ($view) {
+                $count = 0;
+
+                if (Schema::hasTable('messaging_messages')) {
+                    $count = (int) DB::table('messaging_messages')
+                        ->where('direction', 'incoming')
+                        ->whereNull('read_at')
+                        ->count();
+                }
+
+                $view->with('whatsappUnreadCount', $count);
+            }
+        );
     }
 
     public function register(): void

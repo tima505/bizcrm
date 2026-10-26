@@ -61,6 +61,12 @@
                                         <span class="{{ $menuItem->getIcon() }} text-2xl"></span>
 
                                         <p class="whitespace-nowrap font-semibold">{{ $menuItem->getName() }}</p>
+
+                                        @if ($menuKey === 'messages' && ($whatsappUnreadCount ?? 0) > 0)
+                                            <span class="inline-flex min-w-[20px] h-5 px-1.5 items-center justify-center rounded-full bg-red-500 text-white text-xs font-semibold leading-none">
+                                                {{ $whatsappUnreadCount > 99 ? '99+' : $whatsappUnreadCount }}
+                                            </span>
+                                        @endif
                                     </div>
 
                                     @if ($menuItem->haveChildren())
