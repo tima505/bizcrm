@@ -274,10 +274,20 @@
                         </template>
 
                         <template v-else>
-                            <div class="row grid border-b px-4 py-4 text-center text-gray-600 dark:border-gray-800 dark:text-gray-300">
-                                <p>
-                                    @lang('admin::app.components.datagrid.table.no-records-available')
-                                </p>
+                            <div class="row grid border-b px-4 py-10 dark:border-gray-800">
+                                <div class="mx-auto flex max-w-sm flex-col items-center gap-3 text-center">
+                                    <div class="flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
+                                        <span class="icon-note text-3xl text-gray-400 dark:text-gray-500"></span>
+                                    </div>
+
+                                    <p class="text-base font-semibold text-gray-800 dark:text-white">
+                                        @lang('admin::app.components.datagrid.table.no-records-available')
+                                    </p>
+
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                                        @lang('admin::app.components.datagrid.table.no-records-hint')
+                                    </p>
+                                </div>
                             </div>
                         </template>
                     </template>

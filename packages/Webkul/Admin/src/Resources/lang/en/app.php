@@ -309,7 +309,8 @@ return [
             ],
             'table' => [
                 'actions' => 'Actions',
-                'no-records-available' => 'No Records Available.',
+                'no-records-available' => 'No records yet',
+                'no-records-hint' => 'Add the first one using the button above or adjust your filters.',
             ],
         ],
         'modal' => [

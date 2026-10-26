@@ -309,7 +309,8 @@ return [
             ],
             'table' => [
                 'actions' => 'Действия',
-                'no-records-available' => 'Нет записей.',
+                'no-records-available' => 'Записей пока нет',
+                'no-records-hint' => 'Создайте первую запись с помощью кнопки выше или измените фильтры.',
             ],
         ],
         'modal' => [
