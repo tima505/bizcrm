@@ -11,7 +11,7 @@
 
     <div
         id="wa-messages"
-        class="flex h-[calc(100vh-180px)] gap-0 overflow-hidden rounded-md border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
+        class="flex h-[calc(100vh-180px)] gap-0 overflow-hidden rounded-md border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 max-md:h-[calc(100vh-150px)]"
         data-thread-url="{{ route('admin.messages.thread') }}"
         data-send-url="{{ route('admin.messages.send') }}"
         data-lead-url-template="{{ route('admin.leads.view', ['id' => '__ID__']) }}"
@@ -21,7 +21,7 @@
         data-yesterday-short="{{ __('whatsapp::app.time.yesterday') }}"
         data-open-lead="{{ __('whatsapp::app.thread.open-lead') }}"
     >
-        <aside class="flex w-[320px] shrink-0 flex-col border-r border-gray-200 bg-gray-50/60 dark:border-gray-800 dark:bg-gray-900">
+        <aside id="wa-chat-aside" class="flex w-full flex-col border-r border-gray-200 bg-gray-50/60 dark:border-gray-800 dark:bg-gray-900 md:w-[320px] md:shrink-0">
             <div class="border-b border-gray-200 px-4 py-3 text-sm font-semibold text-gray-800 dark:border-gray-800 dark:text-white">
                 {{ __('whatsapp::app.index.title') }}
             </div>
@@ -72,12 +72,18 @@
             </ul>
         </aside>
 
-        <section class="flex min-w-0 flex-1 flex-col bg-[#f0f2f5] dark:bg-gray-900/50">
+        <section id="wa-thread-section" class="hidden min-w-0 flex-1 flex-col bg-[#f0f2f5] dark:bg-gray-900/50 md:flex">
             <div
                 id="wa-thread-header"
                 class="flex items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 dark:border-gray-800 dark:bg-gray-900 dark:text-white"
             >
                 <div class="flex min-w-0 items-center gap-3">
+                    <button
+                        type="button"
+                        id="wa-back"
+                        class="icon-left-arrow -ml-1 shrink-0 rounded-md p-1 text-2xl text-gray-500 hover:bg-gray-100 md:hidden"
+                        aria-label="{{ __('admin::app.layouts.back') }}"
+                    ></button>
                     <span id="wa-thread-avatar" class="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brandColor/15 text-sm font-semibold text-brandColor"></span>
                     <span id="wa-thread-title" class="truncate">
                         {{ __('whatsapp::app.index.pick-chat') }}
@@ -407,6 +413,44 @@
             }
         }
 
+        function isMobile() {
+            return window.matchMedia('(max-width: 767px)').matches;
+        }
+
+        function showThreadPane() {
+            const aside = $('wa-chat-aside');
+            const section = $('wa-thread-section');
+            if (!aside || !section) return;
+            if (isMobile()) {
+                aside.classList.add('hidden');
+                aside.classList.remove('flex');
+                section.classList.remove('hidden');
+                section.classList.add('flex');
+            } else {
+                aside.classList.remove('hidden');
+                aside.classList.add('flex');
+                section.classList.remove('hidden');
+                section.classList.add('flex');
+            }
+        }
+
+        function showListPane() {
+            const aside = $('wa-chat-aside');
+            const section = $('wa-thread-section');
+            if (!aside || !section) return;
+            if (isMobile()) {
+                aside.classList.remove('hidden');
+                aside.classList.add('flex');
+                section.classList.add('hidden');
+                section.classList.remove('flex');
+            } else {
+                aside.classList.remove('hidden');
+                aside.classList.add('flex');
+                section.classList.remove('hidden');
+                section.classList.add('flex');
+            }
+        }
+
         function selectChat(chatId, number, label, leadId) {
             activeChatId = chatId;
             activeNumber = number || chatId;
@@ -416,6 +460,7 @@
 
             removePlaceholder();
             updateHeader();
+            showThreadPane();
 
             const threadEl = $('wa-thread');
             if (threadEl) threadEl.innerHTML = '';
@@ -426,6 +471,24 @@
             if (sendBtn) sendBtn.disabled = false;
 
             loadThread();
+        }
+
+        function goBackToList() {
+            activeChatId = null;
+            activeNumber = null;
+            activeName = null;
+            activeLeadId = null;
+            lastThreadKey = '';
+            updateHeader();
+            showListPane();
+
+            const threadEl = $('wa-thread');
+            if (threadEl) threadEl.innerHTML = '';
+
+            const textInput = $('wa-send-text');
+            const sendBtn = $('wa-send-btn');
+            if (textInput) { textInput.disabled = true; textInput.value = ''; }
+            if (sendBtn) sendBtn.disabled = true;
         }
 
         function autosize(el) {
@@ -479,12 +542,34 @@
         // Delegate click/submit/keydown/input from document so handlers
         // survive Vue mount.
         document.addEventListener('click', (ev) => {
-            const btn = ev.target.closest ? ev.target.closest('.wa-chat-item') : null;
+            const target = ev.target;
+            if (!target || !target.closest) return;
+
+            if (target.closest('#wa-back')) {
+                ev.preventDefault();
+                goBackToList();
+                return;
+            }
+
+            const btn = target.closest('.wa-chat-item');
             if (!btn) return;
             if (!document.getElementById('wa-messages')?.contains(btn)) return;
 
             const label = btn.dataset.name || btn.dataset.number || btn.dataset.chatId;
             selectChat(btn.dataset.chatId, btn.dataset.number, label, btn.dataset.leadId || null);
+        });
+
+        window.addEventListener('resize', () => {
+            // On viewport change, keep the correct pane visible. Debounced via rAF.
+            if (window._waResizeRaf) return;
+            window._waResizeRaf = requestAnimationFrame(() => {
+                window._waResizeRaf = null;
+                if (activeChatId) {
+                    showThreadPane();
+                } else {
+                    showListPane();
+                }
+            });
         });
 
         document.addEventListener('submit', (ev) => {
