@@ -57,11 +57,26 @@ class IncomingController extends Controller
         $chatId = $data['chat_id'];
         $phone = $this->normalizePhone($data['phone_number'] ?? null);
         $display = $phone ?: $data['from_number'] ?? $chatId;
-        $contactName = $data['contact_name'] ?: $display;
 
-        [$personId, $leadId] = DB::transaction(function () use ($chatId, $phone, $display, $contactName) {
+        /**
+         * WhatsApp push-names come from the sender's own profile, so they
+         * are frequently garbage ("." / "~" / an emoji only). Treat a name
+         * as valid only if it contains at least one letter — otherwise fall
+         * back to the phone number for both the person record and the lead
+         * title.
+         */
+        $rawName = trim((string) ($data['contact_name'] ?? ''));
+        $hasRealName = $rawName !== '' && preg_match('/\p{L}/u', $rawName);
+        $contactName = $hasRealName ? $rawName : $display;
+
+        [$personId, $leadId] = DB::transaction(function () use ($chatId, $phone, $display, $contactName, $hasRealName, $rawName) {
             $person = $this->findOrCreatePerson($chatId, $phone, $display, $contactName);
-            $lead = $this->findOrCreateLead($person, $display);
+
+            $leadTitle = $hasRealName
+                ? sprintf('%s (WhatsApp)', $rawName)
+                : sprintf('Клиент %s', $display);
+
+            $lead = $this->findOrCreateLead($person, $leadTitle);
 
             return [$person->id, $lead?->id];
         });
@@ -140,7 +155,7 @@ class IncomingController extends Controller
         return $person;
     }
 
-    protected function findOrCreateLead($person, string $display)
+    protected function findOrCreateLead($person, string $title)
     {
         $existing = $this->leads->getModel()
             ->where('person_id', $person->id)
@@ -154,7 +169,7 @@ class IncomingController extends Controller
 
         return $this->leads->create([
             'entity_type' => 'leads',
-            'title' => 'WhatsApp: '.$display,
+            'title' => $title,
             'description' => null,
             'lead_value' => 0,
             'status' => 1,

@@ -18,9 +18,11 @@ class UserSeeder extends Seeder
     {
         DB::table('users')->delete();
 
+        $defaultLocale = $parameters['locale'] ?? config('app.locale');
+
         DB::table('users')->insert([
             'id' => 1,
-            'name' => 'Example Admin',
+            'name' => trans('installer::app.seeders.user.name', [], $defaultLocale),
             'email' => 'admin@example.com',
             'password' => bcrypt('admin123'),
             // 'api_token' => Str::random(80),

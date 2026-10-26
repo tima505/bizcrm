@@ -87,15 +87,15 @@ return [
 
         'lead' => [
             'pipeline' => [
-                'default' => 'Воронка по умолчанию',
+                'default' => 'Основная воронка',
 
                 'pipeline-stages' => [
-                    'follow-up' => 'В работе',
-                    'lost' => 'Проигран',
+                    'follow-up' => 'Связались',
+                    'lost' => 'Провал',
                     'negotiation' => 'Переговоры',
                     'new' => 'Новый',
-                    'prospect' => 'Квалифицирован',
-                    'won' => 'Выигран',
+                    'prospect' => 'Потенциальный',
+                    'won' => 'Успешно',
                 ],
             ],
 
@@ -108,12 +108,14 @@ return [
             ],
 
             'type' => [
-                'existing-business' => 'Существующий клиент',
+                'existing-business' => 'Повторный клиент',
                 'new-business' => 'Новый клиент',
             ],
         ],
 
         'user' => [
+            'name' => 'Администратор',
+
             'role' => [
                 'administrator-role' => 'Роль администратора',
                 'administrator' => 'Администратор',

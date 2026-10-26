@@ -114,6 +114,8 @@ return [
         ],
 
         'user' => [
+            'name' => 'Administrator',
+
             'role' => [
                 'administrator-role' => 'Administrator Role',
                 'administrator' => 'Administrator',
