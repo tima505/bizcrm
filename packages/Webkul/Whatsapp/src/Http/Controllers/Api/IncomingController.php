@@ -35,6 +35,25 @@ class IncomingController extends Controller
             'timestamp' => 'nullable|integer',
         ]);
 
+        /**
+         * Dedup by (channel, external_id). Baileys replays messages as
+         * type=append after a reconnect, and the Node bridge now forwards
+         * both notify + append events so nothing is lost during disconnect
+         * windows. The side effect is that the same message id can arrive
+         * twice; skip the second write and return success so Node does not
+         * retry further.
+         */
+        if (! empty($data['external_id'])) {
+            $existing = DB::table('messaging_messages')
+                ->where('channel', $data['channel'])
+                ->where('external_id', $data['external_id'])
+                ->exists();
+
+            if ($existing) {
+                return response()->json(['ok' => true, 'deduped' => true]);
+            }
+        }
+
         $chatId = $data['chat_id'];
         $phone = $this->normalizePhone($data['phone_number'] ?? null);
         $display = $phone ?: $data['from_number'] ?? $chatId;

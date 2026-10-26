@@ -1,4 +1,6 @@
 node_modules/
 auth/
+auth-backup-*/
+logs/
 *.log
 .env
