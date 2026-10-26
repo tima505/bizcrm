@@ -484,16 +484,183 @@ php artisan storage:link
 php artisan optimize:clear
 ```
 
-## Что ещё осталось
+## Что сделано (2026-10-26, вторая половина дня) — русификация сид-данных + стабилизация WhatsApp
+
+### WhatsApp-мост: устойчивость сессии + файловый лог (коммит `ffb4b1c9`)
+
+После рескана QR на новое устройство входящие перестали доходить. Причины
+нашлись две:
+
+1. **Старый `messages.upsert` фильтровал только `type: 'notify'`** и
+   отбрасывал `type: 'append'` — а именно append-ом Baileys шлёт то, что
+   пришло, пока сокет был оторван. Теперь принимаются оба типа.
+2. **Нет колбэка `getMessage`** — при `Message Retry Receipt` от
+   контрагента Baileys не мог перезашифровать сообщение, и оно оставалось
+   недоставленным. Добавлен in-memory LRU-кэш на 500 сообщений, который
+   этот колбэк и возвращает.
+
+Дополнительно в `whatsapp-service/index.js`:
+- флаг `reconnecting` против параллельных стартов,
+- `cleanupSocket()` снимает слушатели + закрывает ws у старого сокета (убирает
+  утечку event-handler'ов при серии `badSession` code=500),
+- `DisconnectReason.restartRequired` (515) → мгновенный рестарт за 100мс,
+  остальные — 3с с экспоненциальным backoff до 30с,
+- `markOnlineOnConnect: false` — наш статус в WA не прыгает в online при
+  каждом реконнекте,
+- детектор залипшего `badSession`: 5 code=500 подряд → громкий stderr
+  «удали auth/ и рескан QR»,
+- логи pino через `pino.multistream` в stdout **и**
+  `whatsapp-service/logs/wa.log` (gitignore). Свои `console.log`/`.error`
+  заменены на `log`/`logErr` с ISO-таймстемпами, папка `logs/` создаётся
+  при старте, `logs/` и `auth-backup-*/` добавлены в `.gitignore`
+  сервиса.
+- `/health` отдаёт `reconnectAttempts`, `cachedMessages`,
+  `consecutiveBadSession` — удобный пульс без копания в логе.
+
+На Laravel-стороне в `IncomingController` добавлен **дедуп по
+`(channel, external_id)`**: Baileys со стороны `append`-реплея может
+прислать то же сообщение второй раз, второй POST теперь отвечает
+`{ok: true, deduped: true}` без второй вставки в `messaging_messages`.
+
+Перепривязка подтверждена: старый `auth/` → `auth-backup-20261026-223253/`,
+новый QR отсканирован, после рескана первые два реальных сообщения
+со второго телефона легли в БД (`messaging_messages` id=10, 11),
+`wa.log` поймал полный путь: 515 restart → `connected as` → `init queries`
+timeout → `/admin/messages/thread` отдаёт свежие строки.
+
+### Фикс bare `/admin` под `php artisan serve` (коммит `90e1ac8e`)
+
+LAN-доступ `http://10.161.221.210:8000/admin` с телефона отдавал нативный
+PHP-404 «The requested resource /admin was not found on this server». До
+Laravel запрос не доходил.
+
+Причина: `vendor/.../server.php` на запрос `/admin` делает
+`file_exists('public/admin')` → true (это директория с Vite-ассетами),
+возвращает `false`, и встроенный PHP-сервер пытается листить каталог
+без index-файла. 404.
+
+Фикс: кладём свой `server.php` в корень проекта — `ServeCommand` его
+подхватывает приоритетнее дефолтного. В нашем роутере одно отличие:
+`is_file()` вместо `file_exists()`. Реальные ассеты по-прежнему
+отдаются напрямую, а `/admin` уходит в Laravel и редиректится на
+`/admin/login` штатным middleware.
+
+### Русификация сид-данных (коммит `6c0a3605`)
+
+Миграция `packages/Webkul/Installer/src/Database/Migrations/2026_10_26_000001_translate_seeded_strings_to_russian.php`
+переписывает всё, что сидеры Krayin оставили на английском. Поиск
+по стабильным колонкам, down() симметрично откатывает:
+
+| Таблица | Правка |
+|---|---|
+| `lead_pipelines` | «Default Pipeline» → «Основная воронка» |
+| `lead_pipeline_stages` | 6 стадий по `code`: new→«Новый», follow-up→«Связались», prospect→«Потенциальный», negotiation→«Переговоры», won→«Успешно», lost→«Провал» |
+| `lead_types` | «New Business»→«Новый клиент», «Existing Business»→«Повторный клиент» |
+| `lead_sources` | 5 строк (Email, Web→«Сайт», Web Form→«Веб-форма», Phone→«Телефон», Direct→«Прямой контакт»). «WhatsApp» не трогаем. |
+| `users` | `name` для `id=1 AND email='admin@example.com'`: «Example» → «Администратор» |
+| `roles` | `id=1`: «Administrator» → «Администратор», description → «Роль администратора» |
+| `attributes` | 42 строки по `(entity_type, code)` — Title/Description/Source/Type/Sales Owner/… для leads/persons/organizations/products/quotes/warehouses |
+| `email_templates` | id=1,2: `name` и `subject` — «Активность создана», «Активность изменена». HTML-тело оставлено на отдельную итерацию (там внутри `<td>Title</td>`). |
+
+Для **новых инсталляций** починены сами сиды:
+- `installer/lang/ru/app.php`: формулировки под твой словарь (воронка
+  «Основная», стадии как в таблице выше, type «Повторный клиент»),
+  плюс добавлен ключ `seeders.user.name` в обеих локалях (EN и RU).
+- `UserSeeder.php` больше не хардкодит «Example Admin» — читает
+  `trans('installer::app.seeders.user.name', ..., $defaultLocale)`.
+
+Проверено byte-level через HTTP: `/admin/leads/get?pipeline_id=1` отдаёт
+6 стадий русские, `/admin/settings/users` XHR → имя «Администратор»,
+`/admin/settings/roles` XHR → «Администратор» / «Роль администратора»,
+`/admin/leads/create` HTML содержит все переведённые опции Source/Type
+и русские метки атрибутов. `tools/smoke.ps1` — 16/16 ✓.
+
+Пре-миграционный бэкап: `storage/backups/pre-i18n-20261026-225327.sql`
+(gitignore). Откат — `php artisan migrate:rollback --step=1` крутит
+`down()`, либо `mysql -uroot bizcrm < storage/backups/pre-i18n-...sql`.
+
+### Старые заголовки WhatsApp-лидов переписаны
+
+Миграция `packages/Webkul/Whatsapp/src/Database/Migrations/2026_10_26_000002_rename_old_whatsapp_lead_titles.php`
+находит все `leads` с `title LIKE 'WhatsApp:%'` и переписывает:
+
+- Если `persons.name` содержит буквы (`\p{L}`) → `«<имя> (WhatsApp)»`.
+- Иначе если в `contact_numbers` есть телефон (не `@lid`, не `lid:`) →
+  `«Клиент <phone>»`.
+- Иначе (lid-only чат без раскрытого номера) → `«Клиент WhatsApp»`.
+
+Обновляет и `leads.title`, и зеркало в `attribute_values.text_value`
+(атрибут `(entity_type='leads', code='title')`) в одной транзакции —
+иначе kanban/datagrid показывают разное.
+
+На живой БД: 3 старых заголовка превратились в
+`«♡Rabiya♡ (WhatsApp)»`, `«Клиент +77064181709»`, `«Клиент WhatsApp»`.
+Заодно вычистил 18 осиротевших `attribute_values` от удалённых ранее
+тестовых лидов — локальная ad-hoc правка, миграцией не оформлял
+(на свежей инсталляции такой ситуации не бывает).
+
+**Что осталось переводом не покрыто (отмечено явно):**
+- HTML-содержимое `email_templates.content` — там `<td>Title</td>` и
+  аналогичные ярлычки внутри HTML-таблицы письма, отдельный заход.
+- `activities.title` для старых записей — Krayin их генерирует на лету
+  (например «Обновлено Воронка»), для старых событий в БД они уже
+  зафиксированы с русскими словами благодаря правке attributes.name.
+
+## Что запланировано на 2026-10-27 — интеграция Telegram
+
+Повторить WhatsApp-паттерн для второго канала.
+
+**Node-мост.** Отдельный Node-сервис (можно в этом же `whatsapp-service/`
+переименованной или `telegram-service/` рядом — решим по месту), на
+`node-telegram-bot-api` или прямом Bot API:
+- локально — long polling (`getUpdates`), потому что домашняя машина
+  за NAT и вебхук туда не достать;
+- на сервере — webhook (`setWebhook` на `https://.../api/telegram/incoming`),
+  TLS уже даст Cloudflare/прод-настройка.
+- выбор режима — ENV-переменная `TELEGRAM_MODE=polling|webhook`.
+- те же шаблоны, что в WhatsApp-мосту: `/health`, `/send` c
+  `X-Telegram-Secret`, форвард в Laravel с теми же полями `channel`,
+  `external_id`, `chat_id`, `from_number`, `content`, `direction`,
+  `timestamp`.
+
+**Laravel.** В `messaging_messages` поле `channel` уже обобщённое —
+нужно только разрешить значение `'telegram'`. Отображение в
+`/admin/messages`:
+- тот же список чатов слева, добавить индикатор канала (значок WA /
+  TG) рядом с аватаркой-инициалом;
+- отправка идёт тем же `POST /admin/messages/send`, но контроллер
+  маршрутизирует в тот или иной Node-сервис по `channel` сообщения;
+- для новых входящих — тот же сценарий автосоздания контакт + лид,
+  но источник (`lead_sources`) — «Telegram» (создаётся on-demand,
+  как сейчас с «WhatsApp»).
+
+**Карточка лида из Telegram.** По той же логике, что сейчас с
+WhatsApp:
+- есть username → `«@username (Telegram)»`;
+- есть first_name/last_name → `«Имя Фамилия (Telegram)»`;
+- иначе → `«Клиент Telegram #<chat_id>»`.
+
+**ACL.** Новые permissions `messages.telegram.view` и `.send` (или
+общие с WhatsApp — обсудить). Пункт сайдбара «Сообщения» уже один,
+счётчик непрочитанных просуммирует оба канала (view composer в
+`WhatsappServiceProvider` переименовать в что-то обобщённое, или
+дублировать).
+
+**На потом.** Поиск по чатам, групповые чаты, медиа (сейчас обе
+интеграции только текст).
+
+## Что ещё осталось (общее)
 
 **Для меня (разработчик):**
 - Smoke-тест `http://bizcrm.test` после включения MySQL и hosts — глазами пройти по дашборду, лидам, контактам, предложениям, активностям, настройкам. Если найдутся непереведённые ключи — сообщите, добавлю.
 - Пересобрать Vite (`npm install && npm run build` в `packages/Webkul/Admin`) — опционально, когда нужно будет единое поведение «только исходники». Сейчас исходники и билд в sync вручную.
+- Перевод HTML-содержимого `email_templates.content`.
 
 **Для вас (разово, нужны права администратора):**
 - Прописать `127.0.0.1 bizcrm.test` в hosts (см. раздел Этапа 3 выше).
 - Включить opcache в `php.ini` (см. раздел Этапа 3 выше).
 - Поднять MySQL в Laragon.
+- К завтрашней Telegram-интеграции: создать бота у @BotFather, получить токен и `TELEGRAM_BOT_USERNAME`, зафиксировать в `.env` (как `WHATSAPP_SECRET` сейчас).
 
 **На будущее:**
 - Заменить SVG-заглушки «bizcrm» на реальный логотип (пути — в разделе Этапа 2 выше).
