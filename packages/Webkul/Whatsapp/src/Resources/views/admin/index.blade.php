@@ -3,6 +3,37 @@
         {{ __('whatsapp::app.index.title') }}
     </x-slot>
 
+    {{-- Tailwind JIT in Admin only scans Admin/src/Resources, so arbitrary --}}
+    {{-- values used below (md:w-[320px], h-[calc(...)], min-h-[38px]) never --}}
+    {{-- make it into the built CSS. Inline the rules so the layout works --}}
+    {{-- without a Vite rebuild. --}}
+    @pushOnce('styles')
+    <style>
+        #wa-messages {
+            height: calc(100vh - 180px);
+        }
+        @media (max-width: 767px) {
+            #wa-messages { height: calc(100vh - 150px); }
+        }
+        @media (min-width: 768px) {
+            #wa-chat-aside {
+                width: 300px !important;
+                flex: 0 0 300px !important;
+            }
+            /* `hidden` on the thread section is only meant for the mobile */
+            /* list-view state; on >=md the thread panel is always visible. */
+            #wa-thread-section {
+                display: flex !important;
+            }
+        }
+        #wa-send-text {
+            min-height: 38px;
+            max-height: 128px;
+        }
+        .wa-bubble { max-width: 75%; }
+    </style>
+    @endPushOnce
+
     <div class="mb-5 flex items-center justify-between gap-4 max-sm:flex-wrap">
         <p class="text-2xl font-semibold dark:text-white">
             {{ __('whatsapp::app.index.title') }}
@@ -300,7 +331,7 @@
 
                 parts.push(`
                     <div class="mb-1.5 flex ${isOut ? 'justify-end' : 'justify-start'}">
-                        <div class="max-w-[75%] rounded-lg px-3 py-2 text-sm leading-snug shadow-sm ${bubbleCls}">
+                        <div class="wa-bubble rounded-lg px-3 py-2 text-sm leading-snug shadow-sm ${bubbleCls}">
                             <div class="whitespace-pre-wrap break-words">${escapeHtml(m.content)}</div>
                             <div class="mt-1 text-right text-[10px] ${timeCls}">${escapeHtml(formatBubbleTime(iso))}</div>
                         </div>
