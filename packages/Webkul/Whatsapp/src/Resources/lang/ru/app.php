@@ -34,8 +34,10 @@ return [
     ],
 
     'send' => [
-        'placeholder' => 'Введите сообщение… (Enter — отправить, Shift+Enter — новая строка)',
+        'placeholder' => 'Сообщение…',
+        'hint' => 'Enter — отправить, Shift+Enter — новая строка',
         'button' => 'Отправить',
+        'button-aria' => 'Отправить сообщение',
         'success' => 'Отправлено',
         'failed' => 'Не удалось отправить сообщение',
     ],

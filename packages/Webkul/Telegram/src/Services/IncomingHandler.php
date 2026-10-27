@@ -68,14 +68,20 @@ class IncomingHandler
         $firstName = trim((string) ($from['first_name'] ?? $chat['first_name'] ?? ''));
         $lastName = trim((string) ($from['last_name'] ?? $chat['last_name'] ?? ''));
 
-        $displayName = trim($firstName.' '.$lastName);
+        /**
+         * Treat the pushname as valid only if it actually contains a letter.
+         * Some Telegram profiles have first_name set to "." or an emoji only,
+         * which would otherwise end up as the contact label everywhere.
+         */
+        $rawName = trim($firstName.' '.$lastName);
+        $hasLetterName = $rawName !== '' && preg_match('/\p{L}/u', $rawName);
 
-        if ($displayName === '' && $username !== '') {
+        if ($hasLetterName) {
+            $displayName = $rawName;
+        } elseif ($username !== '') {
             $displayName = '@'.$username;
-        }
-
-        if ($displayName === '') {
-            $displayName = 'Telegram #'.$chatId;
+        } else {
+            $displayName = (string) trans('telegram::app.chat.anonymous');
         }
 
         $leadTitle = $this->buildLeadTitle($firstName, $lastName, $username, $chatId);
@@ -120,7 +126,7 @@ class IncomingHandler
             return '@'.$username.' (Telegram)';
         }
 
-        return 'Клиент Telegram #'.$chatId;
+        return (string) trans('telegram::app.chat.anonymous').' #'.$chatId;
     }
 
     protected function findOrCreatePerson(string $chatId, string $username, string $displayName)

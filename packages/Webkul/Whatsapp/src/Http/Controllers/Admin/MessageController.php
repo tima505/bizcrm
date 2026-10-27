@@ -190,8 +190,11 @@ class MessageController extends Controller
 
     /**
      * Pushname first (if it carries at least one letter — pure dots/digits are
-     * usually garbage from WhatsApp). For lid-only chats fall back to a
-     * neutral label; for routable phone chats use the "+<digits>" form.
+     * usually garbage from WhatsApp/Telegram pushnames). Telegram chats never
+     * fall back to a phone number because the Bot API never gives us one;
+     * use @username when available or a neutral "Клиент Telegram" label.
+     * WhatsApp lid-only chats fall back to the same anonymous label, phone
+     * chats use the "+<digits>" form.
      */
     protected function displayName(object $r): string
     {
@@ -199,6 +202,16 @@ class MessageController extends Controller
 
         if ($name !== '' && preg_match('/\p{L}/u', $name)) {
             return $name;
+        }
+
+        if (($r->channel ?? '') === 'telegram') {
+            $from = trim((string) ($r->from_number ?? ''));
+
+            if ($from !== '' && str_starts_with($from, '@')) {
+                return $from;
+            }
+
+            return (string) trans('telegram::app.chat.anonymous');
         }
 
         if ($this->isLidChat($r)) {
@@ -263,6 +276,12 @@ class MessageController extends Controller
     protected function buildPreview(object $r): string
     {
         $content = trim((string) ($r->content ?? ''));
+
+        // Replace the raw /start bot command with a friendlier label so the
+        // chat list does not read like a terminal log.
+        if ($content === '/start' && ($r->channel ?? '') === 'telegram') {
+            return (string) trans('telegram::app.service.start');
+        }
 
         if ($content === '') {
             $content = '…';

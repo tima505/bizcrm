@@ -31,6 +31,29 @@
             max-height: 128px;
         }
         .wa-bubble { max-width: 75%; }
+        /* Chat title: wrap to two lines, then ellipsis — not a single-line */
+        /* truncate — because real Telegram display names can be long. */
+        #wa-thread-title {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            word-break: break-word;
+            line-height: 1.2;
+        }
+        /* Composer send button: icon-only pill on phones, text on desktop. */
+        .wa-send-btn-icon { display: inline-flex; }
+        .wa-send-btn-text { display: none; }
+        @media (min-width: 768px) {
+            .wa-send-btn-icon { display: none; }
+            .wa-send-btn-text { display: inline-flex; }
+        }
+        /* Only show the Enter/Shift+Enter hint on desktop — on mobile Enter */
+        /* just inserts a newline because the on-screen keyboard needs it. */
+        .wa-send-hint { display: none; }
+        @media (min-width: 768px) {
+            .wa-send-hint { display: block; }
+        }
     </style>
     @endPushOnce
 
@@ -51,6 +74,7 @@
         data-yesterday="{{ __('whatsapp::app.thread.yesterday') }}"
         data-yesterday-short="{{ __('whatsapp::app.time.yesterday') }}"
         data-open-lead="{{ __('whatsapp::app.thread.open-lead') }}"
+        data-service-start="{{ __('telegram::app.service.start') }}"
     >
         <aside id="wa-chat-aside" class="flex w-full flex-col border-r border-gray-200 bg-gray-50/60 dark:border-gray-800 dark:bg-gray-900 md:w-[320px] md:shrink-0">
             <div class="border-b border-gray-200 px-4 py-3 text-sm font-semibold text-gray-800 dark:border-gray-800 dark:text-white">
@@ -125,7 +149,7 @@
                         aria-label="{{ __('admin::app.layouts.back') }}"
                     ></button>
                     <span id="wa-thread-avatar" class="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brandColor/15 text-sm font-semibold text-brandColor"></span>
-                    <span id="wa-thread-title" class="truncate">
+                    <span id="wa-thread-title" class="min-w-0 flex-1">
                         {{ __('whatsapp::app.index.pick-chat') }}
                     </span>
                 </div>
@@ -154,23 +178,35 @@
 
             <form
                 id="wa-send-form"
-                class="flex items-end gap-2 border-t border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900"
+                class="flex flex-col gap-1 border-t border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900"
             >
-                <textarea
-                    id="wa-send-text"
-                    rows="1"
-                    class="max-h-32 min-h-[38px] flex-1 resize-none rounded-md border border-gray-300 bg-white px-3 py-2 text-sm leading-5 placeholder:text-gray-400 focus:border-brandColor focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                    placeholder="{{ __('whatsapp::app.send.placeholder') }}"
-                    disabled
-                ></textarea>
-                <button
-                    type="submit"
-                    class="shrink-0 rounded-md bg-brandColor px-4 py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled
-                    id="wa-send-btn"
-                >
-                    {{ __('whatsapp::app.send.button') }}
-                </button>
+                <div class="flex items-end gap-2">
+                    <textarea
+                        id="wa-send-text"
+                        rows="1"
+                        class="flex-1 resize-none rounded-md border border-gray-300 bg-white px-3 py-2 text-sm leading-5 placeholder:text-gray-400 focus:border-brandColor focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        placeholder="{{ __('whatsapp::app.send.placeholder') }}"
+                        disabled
+                    ></textarea>
+                    <button
+                        type="submit"
+                        class="shrink-0 rounded-full bg-brandColor text-white transition disabled:cursor-not-allowed disabled:opacity-50 md:rounded-md"
+                        disabled
+                        id="wa-send-btn"
+                        aria-label="{{ __('whatsapp::app.send.button-aria') }}"
+                    >
+                        <span class="wa-send-btn-text px-4 py-2 text-sm font-medium">
+                            {{ __('whatsapp::app.send.button') }}
+                        </span>
+                        <span class="wa-send-btn-icon h-10 w-10 items-center justify-center">
+                            {{-- paper plane --}}
+                            <svg viewBox="0 0 24 24" class="h-5 w-5" fill="currentColor" aria-hidden="true"><path d="M3.4 20.5 21 12 3.4 3.5l-.4 6.6 12 1.9-12 1.9z"/></svg>
+                        </span>
+                    </button>
+                </div>
+                <div class="wa-send-hint px-1 text-[11px] text-gray-500 dark:text-gray-400">
+                    {{ __('whatsapp::app.send.hint') }}
+                </div>
             </form>
         </section>
     </div>
@@ -192,6 +228,7 @@
         const yesterdayLabel = rootInitial.dataset.yesterday || 'Yesterday';
         const yesterdayShort = rootInitial.dataset.yesterdayShort || 'yesterday';
         const openLeadLabel = rootInitial.dataset.openLead || 'Open lead';
+        const serviceStartLabel = rootInitial.dataset.serviceStart || 'Chat started';
 
         const $ = (id) => document.getElementById(id);
 
@@ -320,6 +357,21 @@
                             </div>
                         `);
                     }
+                }
+
+                // Bot /start command: render as a centered gray service row
+                // instead of a bubble. It is noise next to real messages, but
+                // keeping it in the thread preserves the "they said hi first"
+                // chronology.
+                if (m.content === '/start' && m.direction === 'incoming') {
+                    parts.push(`
+                        <div class="my-2 flex justify-center">
+                            <span class="rounded-full bg-gray-100 px-3 py-0.5 text-[11px] text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                                ${escapeHtml(serviceStartLabel)}
+                            </span>
+                        </div>
+                    `);
+                    continue;
                 }
 
                 const isOut = m.direction === 'outgoing';
@@ -626,6 +678,10 @@
 
         document.addEventListener('keydown', (ev) => {
             if (!ev.target || ev.target.id !== 'wa-send-text') return;
+            // On mobile the on-screen keyboard's return key must insert a
+            // newline, not fire a send. Only hijack Enter when the viewport
+            // is wide enough to be a real keyboard.
+            if (isMobile()) return;
             if (ev.key === 'Enter' && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey) {
                 ev.preventDefault();
                 doSend();

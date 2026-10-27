@@ -45,6 +45,14 @@ return [
         'how-to-run-prod-cmd' => 'php artisan telegram:webhook set --url=https://your.domain',
     ],
 
+    'chat' => [
+        'anonymous' => 'Клиент Telegram',
+    ],
+
+    'service' => [
+        'start' => 'Клиент начал диалог',
+    ],
+
     'errors' => [
         'token-required' => 'Введите токен бота.',
         'token-format' => 'Токен выглядит некорректно. Он должен быть вида 123456789:AA....',

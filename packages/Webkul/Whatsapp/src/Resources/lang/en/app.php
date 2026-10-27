@@ -34,8 +34,10 @@ return [
     ],
 
     'send' => [
-        'placeholder' => 'Type a message… (Enter to send, Shift+Enter for new line)',
+        'placeholder' => 'Message…',
+        'hint' => 'Enter to send, Shift+Enter for new line',
         'button' => 'Send',
+        'button-aria' => 'Send message',
         'success' => 'Sent',
         'failed' => 'Failed to send the message',
     ],
