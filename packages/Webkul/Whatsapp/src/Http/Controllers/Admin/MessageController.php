@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
+use Webkul\Telegram\Services\TelegramClient;
 use Webkul\Whatsapp\Repositories\MessageRepository;
 use Webkul\Whatsapp\Services\WhatsappClient;
 
@@ -15,6 +16,7 @@ class MessageController extends Controller
     public function __construct(
         protected MessageRepository $messages,
         protected WhatsappClient $client,
+        protected TelegramClient $telegram,
     ) {}
 
     public function index()
@@ -70,14 +72,23 @@ class MessageController extends Controller
         ]);
 
         /**
-         * Always route by the chat_id (the full WhatsApp JID we got on the
-         * inbound side). "number" is only kept as a display hint and may be
-         * a non-routable string like "lid:12345" or "+7...". The JID is what
-         * actually tells WhatsApp which chat to deliver to.
+         * Pick the channel for this chat from the latest stored message. New
+         * chats inherit the channel of their most recent inbound; the UI never
+         * reaches `send` with an unknown chat_id because the composer stays
+         * disabled until a chat is selected.
+         */
+        $channel = $this->resolveChannel($data['chat_id']);
+
+        /**
+         * Route by chat_id — the raw JID for WhatsApp or the numeric chat id
+         * for Telegram. `number` is only a display hint and may be a
+         * non-routable string ("lid:...", "+7...", "@username").
          */
         $target = $data['chat_id'];
 
-        $result = $this->client->send($target, $data['text']);
+        $result = $channel === 'telegram'
+            ? $this->telegram->sendMessage($target, $data['text'])
+            : $this->client->send($target, $data['text']);
 
         if (! ($result['ok'] ?? false)) {
             return response()->json([
@@ -87,7 +98,7 @@ class MessageController extends Controller
         }
 
         $message = $this->messages->create([
-            'channel' => 'whatsapp',
+            'channel' => $channel,
             'external_id' => $result['external_id'] ?? null,
             'chat_id' => $result['chat_id'] ?? $data['chat_id'],
             'from_number' => $data['number'] ?: $data['chat_id'],
@@ -151,6 +162,7 @@ class MessageController extends Controller
 
                 return [
                     'chat_id' => $r->chat_id,
+                    'channel' => $r->channel,
                     'name' => $name,
                     'initial' => $this->initialOf($name),
                     'phone' => $this->displayPhone($r),
@@ -281,5 +293,15 @@ class MessageController extends Controller
             ->value('lead_id');
 
         return $id ? (int) $id : null;
+    }
+
+    protected function resolveChannel(string $chatId): string
+    {
+        $channel = DB::table('messaging_messages')
+            ->where('chat_id', $chatId)
+            ->orderByDesc('id')
+            ->value('channel');
+
+        return $channel ?: 'whatsapp';
     }
 }

@@ -606,7 +606,85 @@ Laravel запрос не доходил.
   (например «Обновлено Воронка»), для старых событий в БД они уже
   зафиксированы с русскими словами благодаря правке attributes.name.
 
-## Что запланировано на 2026-10-27 — интеграция Telegram
+## Что сделано (2026-10-27) — интеграция Telegram
+
+Второй канал в тот же `/admin/messages`. Без Node-моста — отправка и приём
+работают из Laravel. Токен бота вводится через UI (Настройки → Интеграции),
+хранится в БД зашифрованно; `.env` оставлен fallback для dev.
+
+### Пакет `packages/Webkul/Telegram/`
+
+- Миграция `channel_integrations` (channel unique, enabled, settings
+  encrypted JSON, display_name, username, external_id, verified_at).
+- `TelegramClient` — HTTP-обёртка над Bot API: `sendMessage`, `getMe`,
+  `setWebhook`, `deleteWebhook`, `getWebhookInfo`, `getUpdates`. Токен
+  читается из `channel_integrations` в приоритете, фолбэк `TELEGRAM_BOT_TOKEN`.
+- `IncomingHandler` — общий код приёма (используется и webhook'ом,
+  и polling'ом): берёт `message.text`, дедуп по `(channel, external_id)`,
+  автосоздание контакта (`contact_numbers[].value = 'tg:'.chatId`) и лида
+  (source «Telegram», findOrCreate), title лида:
+  - есть `first_name/last_name` → `«<Имя Фамилия> (Telegram)»`,
+  - есть `username` → `«@username (Telegram)»`,
+  - иначе → `«Клиент Telegram #<chat_id>»`.
+- `WebhookController` (`POST /api/telegram/webhook`) + middleware
+  `VerifyTelegramSecret` сверяет заголовок `X-Telegram-Bot-Api-Secret-Token`
+  с секретом из integration row (или env).
+- Artisan `telegram:poll [--once]` — long polling loop для локалки.
+- Artisan `telegram:webhook info|set|delete` — для прода.
+
+### Страница Настройки → Интеграции
+
+- `/admin/settings/integrations` (пункт меню `settings.integrations` в
+  группе Settings).
+- Карточка Telegram: статус (connected/disconnected), поле «Токен бота»
+  (type=password), кнопки «Подключить» / «Переподключить» / «Отключить»,
+  подсказка про @BotFather и короткие cheat-команды (`telegram:poll` /
+  `telegram:webhook`).
+- `POST connect` валидирует формат токена (`\d+:[A-Za-z0-9_-]{20,}`),
+  вызывает `getMe` для проверки; если ок — шифрует и сохраняет, запоминает
+  `username`/`display_name`/`external_id`/`verified_at`, автогенерирует
+  `webhook_secret` (Str::random(48)) если его ещё нет.
+- `POST disconnect` переключает `enabled=false`, токен остаётся — можно
+  включить обратно.
+- ACL: `settings.integrations.view`, `settings.integrations.edit`.
+
+### Multi-канальная отправка в `/admin/messages`
+
+- `Whatsapp\Admin\MessageController::send()` теперь выбирает канал по
+  последнему сообщению `chat_id` (новый метод `resolveChannel`), и
+  маршрутизирует в `TelegramClient::sendMessage` или
+  `WhatsappClient::send`. Записывает outgoing с правильным `channel`.
+- `chatList()` отдаёт поле `channel` в каждом элементе.
+- Blade + JS `renderChatList`: мини-значок канала (голубой самолётик для
+  Telegram, зелёная трубка для WhatsApp) на правый нижний угол аватарки.
+- Unread badge в сайдбаре уже суммирует оба канала (нет фильтра по channel).
+
+### Регистрация
+
+- `composer.json` autoload: `Webkul\\Telegram\\` → `packages/Webkul/Telegram/src`.
+- `bootstrap/providers.php`: `TelegramServiceProvider`.
+- `config/concord.php`: `TelegramModuleServiceProvider` (`ChannelIntegration` + `Message` c Contracts и ModelProxy).
+- `.env.example` дополнен: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_WEBHOOK_URL`.
+
+### Как подключить (разово)
+
+1. У @BotFather создать бота, скопировать токен.
+2. В CRM: Настройки → Интеграции → вставить токен → «Подключить».
+   После успешной проверки появится статус «Подключён» и имя `@your_bot`.
+3. Окно PowerShell: `& 'C:\laragon\bin\php\php-8.3.33-Win32-vs16-x64\php.exe' artisan telegram:poll`.
+4. Со второго аккаунта написать боту в Telegram → чат появится в
+   `/admin/messages` через 1–2 секунды. Контакт и лид создадутся
+   автоматически (source «Telegram»).
+
+### Что не покрыто (вне MVP)
+
+- Картинки/медиа — только текст.
+- Групповые чаты — приходят, без правильной привязки.
+- Inline-кнопки / reply markup.
+- Статусы доставки/прочтения (у Bot API их нет аналогично WA).
+- Queue — отправка синхронная внутри HTTP-запроса.
+
+## (архив) Что было запланировано на 2026-10-27 — интеграция Telegram
 
 Повторить WhatsApp-паттерн для второго канала.
 

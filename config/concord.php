@@ -16,6 +16,7 @@ use Webkul\Tag\Providers\ModuleServiceProvider as TagModuleServiceProvider;
 use Webkul\User\Providers\ModuleServiceProvider as UserModuleServiceProvider;
 use Webkul\Warehouse\Providers\ModuleServiceProvider as WarehouseModuleServiceProvider;
 use Webkul\WebForm\Providers\ModuleServiceProvider as WebFormModuleServiceProvider;
+use Webkul\Telegram\Providers\ModuleServiceProvider as TelegramModuleServiceProvider;
 use Webkul\Whatsapp\Providers\ModuleServiceProvider as WhatsappModuleServiceProvider;
 
 return [
@@ -37,6 +38,7 @@ return [
         WarehouseModuleServiceProvider::class,
         WebFormModuleServiceProvider::class,
         WhatsappModuleServiceProvider::class,
+        TelegramModuleServiceProvider::class,
         DataTransferModuleServiceProvider::class,
     ],
 

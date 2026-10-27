@@ -36,8 +36,17 @@
                             data-name="{{ $chat['name'] }}"
                             data-lead-id="{{ $chat['lead_id'] ?? '' }}"
                         >
-                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brandColor/15 text-sm font-semibold text-brandColor">
+                            <span class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brandColor/15 text-sm font-semibold text-brandColor">
                                 {{ $chat['initial'] }}
+                                @if (($chat['channel'] ?? 'whatsapp') === 'telegram')
+                                    <span class="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-sky-500 text-white ring-2 ring-white dark:ring-gray-900" title="Telegram">
+                                        <svg viewBox="0 0 24 24" class="h-2.5 w-2.5" fill="currentColor"><path d="M9.03 15.47 8.9 19.5c.37 0 .54-.16.74-.35l1.78-1.7 3.68 2.69c.68.37 1.17.17 1.35-.63l2.44-11.46h.01c.21-1-.37-1.39-1.03-1.14L3.9 10.76c-.98.38-.97.93-.17 1.17l3.6 1.12 8.36-5.27c.4-.26.76-.12.47.14z"/></svg>
+                                    </span>
+                                @else
+                                    <span class="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-white ring-2 ring-white dark:ring-gray-900" title="WhatsApp">
+                                        <svg viewBox="0 0 24 24" class="h-2.5 w-2.5" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.5 15.3L2 22l4.9-1.3A10 10 0 1 0 12 2zm3.1 14.5c-.5-.3-1.6-.9-1.9-1-.3-.1-.5-.1-.7.2-.2.3-.9 1-1 1.2-.2.2-.4.2-.7.1-.5-.3-1.3-.8-2-1.5-.6-.6-1.2-1.5-1.4-1.9-.1-.3 0-.4.1-.6.1-.2.3-.4.5-.6.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5-.1-.1-.7-1.5-.9-2-.2-.6-.4-.5-.6-.5h-.5c-.2 0-.5.1-.7.3-.3.3-.9.9-.9 2.2 0 1.3.9 2.6 1.1 2.8.1.2 1.8 2.9 4.5 3.9.6.3 1.1.4 1.5.5.6.2 1.2.2 1.7.1.5-.1 1.6-.6 1.8-1.3.2-.6.2-1.2.2-1.3-.1-.1-.3-.2-.6-.3z"/></svg>
+                                    </span>
+                                @endif
                             </span>
                             <span class="flex min-w-0 flex-1 flex-col">
                                 <span class="flex items-baseline justify-between gap-2">
@@ -322,6 +331,10 @@
                 const outArrow = c.direction === 'outgoing' ? '<span class="text-gray-400">↗</span> ' : '';
                 const leadAttr = c.lead_id ? `data-lead-id="${escapeHtml(c.lead_id)}"` : '';
                 const name = c.name || c.phone || anonymousLabel;
+                const channel = c.channel || 'whatsapp';
+                const channelBadge = channel === 'telegram'
+                    ? `<span class="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-sky-500 text-white ring-2 ring-white dark:ring-gray-900" title="Telegram"><svg viewBox="0 0 24 24" class="h-2.5 w-2.5" fill="currentColor"><path d="M9.03 15.47 8.9 19.5c.37 0 .54-.16.74-.35l1.78-1.7 3.68 2.69c.68.37 1.17.17 1.35-.63l2.44-11.46h.01c.21-1-.37-1.39-1.03-1.14L3.9 10.76c-.98.38-.97.93-.17 1.17l3.6 1.12 8.36-5.27c.4-.26.76-.12.47.14z"/></svg></span>`
+                    : `<span class="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-white ring-2 ring-white dark:ring-gray-900" title="WhatsApp"><svg viewBox="0 0 24 24" class="h-2.5 w-2.5" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.5 15.3L2 22l4.9-1.3A10 10 0 1 0 12 2zm3.1 14.5c-.5-.3-1.6-.9-1.9-1-.3-.1-.5-.1-.7.2-.2.3-.9 1-1 1.2-.2.2-.4.2-.7.1-.5-.3-1.3-.8-2-1.5-.6-.6-1.2-1.5-1.4-1.9-.1-.3 0-.4.1-.6.1-.2.3-.4.5-.6.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5-.1-.1-.7-1.5-.9-2-.2-.6-.4-.5-.6-.5h-.5c-.2 0-.5.1-.7.3-.3.3-.9.9-.9 2.2 0 1.3.9 2.6 1.1 2.8.1.2 1.8 2.9 4.5 3.9.6.3 1.1.4 1.5.5.6.2 1.2.2 1.7.1.5-.1 1.6-.6 1.8-1.3.2-.6.2-1.2.2-1.3-.1-.1-.3-.2-.6-.3z"/></svg></span>`;
 
                 return `
                     <li>
@@ -333,8 +346,9 @@
                             data-name="${escapeHtml(name)}"
                             ${leadAttr}
                         >
-                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brandColor/15 text-sm font-semibold text-brandColor">
+                            <span class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brandColor/15 text-sm font-semibold text-brandColor">
                                 ${escapeHtml(c.initial || '?')}
+                                ${channelBadge}
                             </span>
                             <span class="flex min-w-0 flex-1 flex-col">
                                 <span class="flex items-baseline justify-between gap-2">

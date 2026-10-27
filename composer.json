@@ -82,7 +82,8 @@
             "Webkul\\Warehouse\\": "packages/Webkul/Warehouse/src",
             "Webkul\\WebForm\\": "packages/Webkul/WebForm/src",
             "Webkul\\Automation\\": "packages/Webkul/Automation/src",
-            "Webkul\\Whatsapp\\": "packages/Webkul/Whatsapp/src"
+            "Webkul\\Whatsapp\\": "packages/Webkul/Whatsapp/src",
+            "Webkul\\Telegram\\": "packages/Webkul/Telegram/src"
         }
     },
     "autoload-dev": {
